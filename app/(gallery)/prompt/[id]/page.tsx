@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { supabase } from '@/lib/supabase';
+import { fromRow } from '@/lib/db';
 import type { DbPrompt } from '@/lib/db';
 import type { Prompt } from '@/lib/types';
 import { PromptDetail } from '@/components/prompt/PromptDetail';
@@ -87,8 +88,8 @@ export default async function PromptPage({
     .order('featured', { ascending: false })
     .limit(3);
 
-  const prompt  = toPrompt(row as DbPrompt);
-  const related = (relatedRows ?? []).map((r) => toPrompt(r as DbPrompt));
+  const prompt  = toPrompt(fromRow(row));
+  const related = (relatedRows ?? []).map((r) => toPrompt(fromRow(r)));
 
   return <PromptDetail prompt={prompt} related={related} />;
 }

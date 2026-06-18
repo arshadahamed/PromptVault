@@ -32,7 +32,7 @@ export interface DbCategory {
 // ── Row mappers ───────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function fromRow(row: any): DbPrompt {
+export function fromRow(row: any): DbPrompt {
   return {
     id:           row.id,
     sourceId:     row.source_id ?? undefined,
