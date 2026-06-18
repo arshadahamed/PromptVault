@@ -7,18 +7,16 @@ import {
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { type Prompt } from '@/lib/types';
-import { getRelatedPrompts } from '@/data/prompts';
 import { useApp } from '@/context/AppContext';
 import { RelatedGrid } from './RelatedGrid';
 import { cn } from '@/lib/utils';
 
-export function PromptDetail({ prompt }: { prompt: Prompt }) {
+export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Prompt[] }) {
   const router = useRouter();
   const { favorites, toggleFavorite } = useApp();
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
   const liked = favorites.includes(prompt.id);
-  const related = getRelatedPrompts(prompt.relatedIds);
 
   const copy = async () => {
     try {
