@@ -49,9 +49,7 @@ export async function generateMetadata(): Promise<Metadata> {
       follow: true,
       googleBot: { index: true, follow: true, 'max-image-preview': 'large' },
     },
-    icons: s.faviconUrl
-      ? { icon: s.faviconUrl, shortcut: s.faviconUrl }
-      : undefined,
+    // favicon served by app/icon.tsx (reads settings dynamically)
   };
 }
 
