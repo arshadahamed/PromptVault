@@ -51,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     icons: s.faviconUrl
       ? { icon: s.faviconUrl, shortcut: s.faviconUrl }
-      : { icon: '/favicon.ico' },
+      : undefined,
   };
 }
 
