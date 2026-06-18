@@ -1,27 +1,43 @@
 'use client';
-import { useState, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import Link from 'next/link';
-import { prompts } from '@/data/prompts';
 import { ModalShell } from './ModalShell';
 import { useApp } from '@/context/AppContext';
 
+interface SearchResult {
+  id: string;
+  promptText: string;
+  model: string;
+  gradientFrom: string;
+  gradientTo: string;
+  localImg: string;
+  authorName: string;
+  handle: string;
+}
+
 export function SearchModal({ open }: { open: boolean }) {
   const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SearchResult[]>([]);
   const { closeModal } = useApp();
 
-  const results = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.toLowerCase();
-    return prompts
-      .filter(
-        (p) =>
-          p.promptText.toLowerCase().includes(q) ||
-          p.author.name.toLowerCase().includes(q) ||
-          p.model.toLowerCase().includes(q) ||
-          p.category.toLowerCase().includes(q)
-      )
-      .slice(0, 10);
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); return; }
+    const controller = new AbortController();
+    fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => setResults(data.map((p: any) => ({
+        id: p.id,
+        promptText: p.promptText || p.prompt_text || '',
+        model: p.model || '',
+        gradientFrom: p.gradientFrom || p.gradient_from || '#d4f5b4',
+        gradientTo: p.gradientTo || p.gradient_to || '#f5b4e8',
+        localImg: p.localImg || p.local_img || '',
+        authorName: p.authorName || p.author_name || 'Admin',
+        handle: p.handle || '@admin',
+      }))))
+      .catch(() => {});
+    return () => controller.abort();
   }, [query]);
 
   return (
@@ -49,20 +65,16 @@ export function SearchModal({ open }: { open: boolean }) {
               >
                 <div
                   className="w-10 h-10 rounded-[8px] shrink-0 overflow-hidden"
-                  style={{
-                    background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})`,
-                  }}
+                  style={{ background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})` }}
                 >
-                  {p.localImg && (
-                    <img src={p.localImg} alt="" className="w-full h-full object-cover" />
-                  )}
+                  {p.localImg && <img src={p.localImg} alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] font-medium text-[#1b1b1b] leading-snug line-clamp-2">
                     {p.promptText.slice(0, 80)}
                   </p>
                   <p className="text-[11px] text-[#6b7280] mt-0.5">
-                    {p.author.handle} · {p.model}
+                    {p.handle} · {p.model}
                   </p>
                 </div>
               </Link>

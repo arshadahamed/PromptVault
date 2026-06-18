@@ -1,15 +1,41 @@
 'use client';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Clock } from 'lucide-react';
-import { prompts } from '@/data/prompts';
 import { ModalShell } from './ModalShell';
 import { useApp } from '@/context/AppContext';
 
+interface PromptItem {
+  id: string;
+  promptText: string;
+  model: string;
+  gradientFrom: string;
+  gradientTo: string;
+  localImg: string;
+}
+
+function mapItem(p: any): PromptItem {
+  return {
+    id: p.id,
+    promptText: p.promptText || p.prompt_text || '',
+    model: p.model || '',
+    gradientFrom: p.gradientFrom || p.gradient_from || '#d4f5b4',
+    gradientTo: p.gradientTo || p.gradient_to || '#f5b4e8',
+    localImg: p.localImg || p.local_img || '',
+  };
+}
+
 export function HistoryModal({ open }: { open: boolean }) {
   const { history, closeModal } = useApp();
-  const items = history
-    .map((id) => prompts.find((p) => p.id === id))
-    .filter(Boolean) as typeof prompts;
+  const [items, setItems] = useState<PromptItem[]>([]);
+
+  useEffect(() => {
+    if (!history.length) { setItems([]); return; }
+    fetch(`/api/prompts/batch?ids=${history.join(',')}`)
+      .then((r) => r.ok ? r.json() : [])
+      .then((data) => setItems((data as any[]).map(mapItem)))
+      .catch(() => {});
+  }, [history]);
 
   return (
     <ModalShell title="History" open={open}>
@@ -31,13 +57,9 @@ export function HistoryModal({ open }: { open: boolean }) {
               >
                 <div
                   className="w-10 h-10 rounded-[8px] shrink-0 overflow-hidden"
-                  style={{
-                    background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})`,
-                  }}
+                  style={{ background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})` }}
                 >
-                  {p.localImg && (
-                    <img src={p.localImg} alt="" className="w-full h-full object-cover" />
-                  )}
+                  {p.localImg && <img src={p.localImg} alt="" className="w-full h-full object-cover" />}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[12px] font-medium text-[#1b1b1b] leading-snug line-clamp-2">
