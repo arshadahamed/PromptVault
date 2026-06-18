@@ -1,7 +1,4 @@
-import fs from 'fs';
-import path from 'path';
-
-const SETTINGS_PATH = path.join(process.cwd(), 'data', 'settings.json');
+import { supabase } from './supabase';
 
 export interface SiteSettings {
   siteName: string;
@@ -33,19 +30,22 @@ export interface SiteSettings {
   updatedAt: string;
 }
 
-export function getSettings(): SiteSettings {
-  if (!fs.existsSync(SETTINGS_PATH)) return defaultSettings();
-  const raw = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
-  // backfill new fields for existing installations
-  return { ...defaultSettings(), ...raw };
+export async function getSettings(): Promise<SiteSettings> {
+  const { data } = await supabase
+    .from('settings')
+    .select('data')
+    .eq('id', 1)
+    .maybeSingle();
+  if (!data) return defaultSettings();
+  return { ...defaultSettings(), ...(data.data as Partial<SiteSettings>) };
 }
 
-export function saveSettings(data: Partial<SiteSettings>): SiteSettings {
-  const current = getSettings();
-  const updated = { ...current, ...data, updatedAt: new Date().toISOString() };
-  const tmp = SETTINGS_PATH + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(updated, null, 2));
-  fs.renameSync(tmp, SETTINGS_PATH);
+export async function saveSettings(patch: Partial<SiteSettings>): Promise<SiteSettings> {
+  const current = await getSettings();
+  const updated: SiteSettings = { ...current, ...patch, updatedAt: new Date().toISOString() };
+  await supabase
+    .from('settings')
+    .upsert({ id: 1, data: updated, updated_at: updated.updatedAt });
   return updated;
 }
 
