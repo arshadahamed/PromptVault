@@ -53,9 +53,48 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const s = await getSettings();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://egrow.lk';
+  const siteName = s.siteName || 'PromptVault';
+  const description = s.metaDescription || s.siteDescription || 'Browse 1,977+ free AI prompts for ChatGPT, Midjourney, Gemini, DALL-E, Flux, and more.';
+
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': 'WebSite',
+        '@id': `${siteUrl}/#website`,
+        url: siteUrl,
+        name: siteName,
+        description,
+        inLanguage: 'en-US',
+      },
+      {
+        '@type': 'Organization',
+        '@id': `${siteUrl}/#organization`,
+        name: siteName,
+        url: siteUrl,
+        logo: s.logoImageUrl
+          ? { '@type': 'ImageObject', url: s.logoImageUrl }
+          : undefined,
+        sameAs: [
+          s.socialLinks?.twitter  ? `https://twitter.com/${s.socialLinks.twitter.split('/').pop()}` : undefined,
+          s.socialLinks?.github   ? s.socialLinks.github : undefined,
+          s.socialLinks?.youtube  ? s.socialLinks.youtube : undefined,
+        ].filter(Boolean),
+      },
+    ],
+  };
+
   return (
     <html lang="en">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
+        />
+      </head>
       <body>{children}</body>
     </html>
   );
