@@ -50,6 +50,19 @@ export function SidebarFooter({ settings, isLoggedIn }: Props) {
         </p>
       )}
 
+      {/* Attribution */}
+      <p className="text-[10px] text-[#9ca3af]">
+        Made by{' '}
+        <a
+          href="https://arshadahamed.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[#7c3aed] hover:underline font-medium"
+        >
+          ArshaD
+        </a>
+      </p>
+
       {isLoggedIn ? (
         <>
           {/* Admin Panel button */}
