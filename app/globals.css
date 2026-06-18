@@ -1,0 +1,188 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700&family=Barlow+Condensed:wght@400;500;600;700&display=swap');
+
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #ffffff;
+  --color-foreground: #1b1b1b;
+  --color-muted: #f7f4ed;
+  --color-muted-active: #ebe8e1;
+  --color-muted-hover: #d6d3cc;
+  --color-muted-foreground: #6b7280;
+  --color-muted-foreground-subtle: #9ca3af;
+  --color-border: #e5e7eb;
+  --color-sidebar: #ffffff;
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-poppins: 'Poppins', sans-serif;
+  --font-barlow: 'Barlow Condensed', sans-serif;
+}
+
+:root {
+  --sidebar-width: 260px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+body {
+  background-color: #ffffff;
+  color: #1b1b1b;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 0.9375rem;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+}
+
+img {
+  display: block;
+}
+
+/* ── Lazy image shimmer ── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* ── Rainbow glow border — Get Started button ── */
+@keyframes rainbow-spin {
+  to { background-position: 200% center; }
+}
+
+.btn-rainbow {
+  position: relative;
+  background: transparent;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  z-index: 0;
+}
+
+.btn-rainbow::before {
+  content: '';
+  position: absolute;
+  inset: -1.5px;
+  border-radius: 11.5px;
+  background: linear-gradient(
+    90deg,
+    #ff4242, #ffa142, #ffff42, #42ff42,
+    #42ffff, #4242ff, #ff42ff, #ff4242
+  );
+  background-size: 200% 100%;
+  animation: rainbow-spin 3s linear infinite;
+  z-index: -1;
+}
+
+.btn-rainbow::after {
+  content: '';
+  position: absolute;
+  inset: 1.5px;
+  background: #121213;
+  border-radius: 8.5px;
+  z-index: -1;
+}
+
+/* ── Beige skeleton shimmer ── */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #ebe8e1 25%,
+    #d6d3cc 50%,
+    #ebe8e1 75%
+  );
+  background-size: 1200px 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+  border-radius: 14px;
+}
+
+/* ── Glass blur — floating elements ── */
+.glass {
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(229, 231, 235, 0.7);
+}
+
+/* ── Masonry column layout helpers ── */
+.masonry-3 {
+  column-count: 3;
+  column-gap: 12px;
+}
+
+.masonry-2 {
+  column-count: 2;
+  column-gap: 10px;
+}
+
+@media (max-width: 767px) {
+  .masonry-3 {
+    column-count: 2;
+    column-gap: 10px;
+  }
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d6d3cc; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+/* ── Login / Admin premium animations ── */
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33%       { transform: translateY(-18px) rotate(1.5deg); }
+  66%       { transform: translateY(-8px) rotate(-1deg); }
+}
+@keyframes float-medium {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50%       { transform: translateY(-24px) rotate(2deg); }
+}
+@keyframes orb-pulse {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%       { opacity: 0.75; transform: scale(1.08); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes spin-reverse {
+  from { transform: rotate(360deg); }
+  to   { transform: rotate(0deg); }
+}
+@keyframes gradient-x {
+  0%, 100% { background-position: 0% 50%; }
+  50%       { background-position: 100% 50%; }
+}
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 20px rgba(124,58,237,0.3), 0 0 60px rgba(124,58,237,0.1); }
+  50%       { box-shadow: 0 0 40px rgba(124,58,237,0.6), 0 0 80px rgba(124,58,237,0.2); }
+}
+@keyframes rotate-3d {
+  0%   { transform: perspective(600px) rotateX(15deg) rotateY(0deg); }
+  100% { transform: perspective(600px) rotateX(15deg) rotateY(360deg); }
+}
+.anim-float-slow   { animation: float-slow 7s ease-in-out infinite; }
+.anim-float-medium { animation: float-medium 5s ease-in-out infinite; }
+.anim-orb-pulse    { animation: orb-pulse 4s ease-in-out infinite; }
+.anim-spin-slow    { animation: spin-slow 20s linear infinite; }
+.anim-spin-reverse { animation: spin-reverse 15s linear infinite; }
+.anim-fade-up      { animation: fade-up 0.6s ease forwards; }
+.anim-glow-pulse   { animation: glow-pulse 3s ease-in-out infinite; }
+.anim-gradient-x   { background-size: 200% 200%; animation: gradient-x 4s ease infinite; }
