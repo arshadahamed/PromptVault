@@ -1,10 +1,5 @@
-import fs from 'fs';
-import path from 'path';
 import crypto from 'crypto';
-
-const DB_PATH = path.join(process.cwd(), 'data', 'db.json');
-const PROMPTS_TS = path.join(process.cwd(), 'data', 'prompts.ts');
-const IMG_DIR = path.join(process.cwd(), 'public', 'images');
+import { supabase } from './supabase';
 
 export interface DbPrompt {
   id: string;
@@ -34,209 +29,179 @@ export interface DbCategory {
   createdAt: string;
 }
 
-interface DB {
-  prompts: DbPrompt[];
-  categories: DbCategory[];
-}
+// ── Row mappers ───────────────────────────────────────────────────────────────
 
-function readDB(): DB {
-  if (!fs.existsSync(DB_PATH)) {
-    const empty: DB = { prompts: [], categories: [] };
-    writeDB(empty);
-    return empty;
-  }
-  return JSON.parse(fs.readFileSync(DB_PATH, 'utf8'));
-}
-
-function writeDB(db: DB): void {
-  const tmp = DB_PATH + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db, null, 2));
-  fs.renameSync(tmp, DB_PATH);
-}
-
-// ── Prompts ──────────────────────────────────────────────────────────────────
-
-export function getAllPrompts(): DbPrompt[] {
-  return readDB().prompts;
-}
-
-export function getPromptById(id: string): DbPrompt | undefined {
-  return readDB().prompts.find((p) => p.id === id);
-}
-
-export function getPromptsByTab(tab: string): DbPrompt[] {
-  const all = readDB().prompts;
-  return tab === 'All' ? all : all.filter((p) => p.tab === tab);
-}
-
-export function searchPrompts(query: string): DbPrompt[] {
-  const q = query.toLowerCase();
-  return readDB().prompts.filter(
-    (p) =>
-      p.promptText.toLowerCase().includes(q) ||
-      p.authorName.toLowerCase().includes(q) ||
-      p.model.toLowerCase().includes(q) ||
-      p.category.toLowerCase().includes(q)
-  );
-}
-
-export function createPrompt(data: Omit<DbPrompt, 'id' | 'createdAt' | 'updatedAt'>): DbPrompt {
-  const db = readDB();
-  const now = new Date().toISOString();
-  const prompt: DbPrompt = {
-    ...data,
-    featured: data.featured ?? false,
-    published: data.published ?? true,
-    id: 'p' + crypto.randomBytes(8).toString('hex'),
-    createdAt: now,
-    updatedAt: now,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fromRow(row: any): DbPrompt {
+  return {
+    id:           row.id,
+    sourceId:     row.source_id ?? undefined,
+    promptText:   row.prompt_text,
+    imageUrl:     row.image_url ?? '',
+    localImg:     row.local_img ?? '',
+    authorName:   row.author_name ?? 'Admin',
+    handle:       row.handle ?? '@admin',
+    model:        row.model,
+    category:     row.category,
+    tab:          row.tab,
+    likes:        row.likes ?? 0,
+    views:        row.views ?? 0,
+    gradientFrom: row.gradient_from ?? '#d4f5b4',
+    gradientTo:   row.gradient_to ?? '#f5b4e8',
+    aspectRatio:  row.aspect_ratio ?? '4/3',
+    createdAt:    row.created_at,
+    updatedAt:    row.updated_at,
+    featured:     row.featured ?? false,
+    published:    row.published ?? true,
   };
-  db.prompts.push(prompt);
-  writeDB(db);
-  regeneratePromptTs(db);
-  return prompt;
 }
 
-export function bulkDeletePrompts(ids: string[]): number {
-  const db = readDB();
-  const before = db.prompts.length;
-  const set = new Set(ids);
-  db.prompts = db.prompts.filter((p) => !set.has(p.id));
-  const removed = before - db.prompts.length;
-  if (removed > 0) { writeDB(db); regeneratePromptTs(db); }
-  return removed;
+function toRow(p: Partial<DbPrompt>): Record<string, unknown> {
+  const r: Record<string, unknown> = {};
+  if (p.id !== undefined)           r.id = p.id;
+  if (p.sourceId !== undefined)     r.source_id = p.sourceId;
+  if (p.promptText !== undefined)   r.prompt_text = p.promptText;
+  if (p.imageUrl !== undefined)     r.image_url = p.imageUrl;
+  if (p.localImg !== undefined)     r.local_img = p.localImg;
+  if (p.authorName !== undefined)   r.author_name = p.authorName;
+  if (p.handle !== undefined)       r.handle = p.handle;
+  if (p.model !== undefined)        r.model = p.model;
+  if (p.category !== undefined)     r.category = p.category;
+  if (p.tab !== undefined)          r.tab = p.tab;
+  if (p.likes !== undefined)        r.likes = p.likes;
+  if (p.views !== undefined)        r.views = p.views;
+  if (p.gradientFrom !== undefined) r.gradient_from = p.gradientFrom;
+  if (p.gradientTo !== undefined)   r.gradient_to = p.gradientTo;
+  if (p.aspectRatio !== undefined)  r.aspect_ratio = p.aspectRatio;
+  if (p.featured !== undefined)     r.featured = p.featured;
+  if (p.published !== undefined)    r.published = p.published;
+  return r;
 }
 
-export function updatePrompt(id: string, data: Partial<DbPrompt>): DbPrompt | null {
-  const db = readDB();
-  const idx = db.prompts.findIndex((p) => p.id === id);
-  if (idx < 0) return null;
-  db.prompts[idx] = { ...db.prompts[idx], ...data, id, updatedAt: new Date().toISOString() };
-  writeDB(db);
-  regeneratePromptTs(db);
-  return db.prompts[idx];
+// ── Prompts ───────────────────────────────────────────────────────────────────
+
+export async function getAllPrompts(): Promise<DbPrompt[]> {
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(fromRow);
 }
 
-export function deletePrompt(id: string): boolean {
-  const db = readDB();
-  const before = db.prompts.length;
-  db.prompts = db.prompts.filter((p) => p.id !== id);
-  if (db.prompts.length === before) return false;
-  writeDB(db);
-  regeneratePromptTs(db);
-  return true;
+export async function getPromptById(id: string): Promise<DbPrompt | undefined> {
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? fromRow(data) : undefined;
+}
+
+export async function searchPrompts(query: string): Promise<DbPrompt[]> {
+  const q = `%${query}%`;
+  const { data, error } = await supabase
+    .from('prompts')
+    .select('*')
+    .or(`prompt_text.ilike.${q},model.ilike.${q},category.ilike.${q},author_name.ilike.${q}`);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(fromRow);
+}
+
+export async function createPrompt(
+  data: Omit<DbPrompt, 'id' | 'createdAt' | 'updatedAt'>
+): Promise<DbPrompt> {
+  const id  = 'p' + crypto.randomBytes(8).toString('hex');
+  const now = new Date().toISOString();
+  const row = {
+    ...toRow({ ...data, id }),
+    created_at: now,
+    updated_at: now,
+    featured:   data.featured ?? false,
+    published:  data.published ?? true,
+  };
+  const { data: inserted, error } = await supabase
+    .from('prompts')
+    .insert(row)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return fromRow(inserted);
+}
+
+export async function updatePrompt(
+  id: string,
+  data: Partial<DbPrompt>
+): Promise<DbPrompt | null> {
+  const row = { ...toRow(data), updated_at: new Date().toISOString() };
+  const { data: updated, error } = await supabase
+    .from('prompts')
+    .update(row)
+    .eq('id', id)
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return updated ? fromRow(updated) : null;
+}
+
+export async function deletePrompt(id: string): Promise<boolean> {
+  const { error, count } = await supabase
+    .from('prompts')
+    .delete({ count: 'exact' })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
+}
+
+export async function bulkDeletePrompts(ids: string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const { error, count } = await supabase
+    .from('prompts')
+    .delete({ count: 'exact' })
+    .in('id', ids);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }
 
 // ── Categories ────────────────────────────────────────────────────────────────
 
-export function getAllCategories(): DbCategory[] {
-  return readDB().categories;
+export async function getAllCategories(): Promise<DbCategory[]> {
+  const { data, error } = await supabase
+    .from('categories')
+    .select('*')
+    .order('name');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => ({ id: r.id, name: r.name, createdAt: r.created_at }));
 }
 
-export function createCategory(name: string): DbCategory {
-  const db = readDB();
-  const cat: DbCategory = {
-    id: 'cat_' + crypto.randomBytes(4).toString('hex'),
-    name: name.trim(),
-    createdAt: new Date().toISOString(),
-  };
-  db.categories.push(cat);
-  writeDB(db);
-  return cat;
+export async function createCategory(name: string): Promise<DbCategory> {
+  const id = 'cat_' + crypto.randomBytes(4).toString('hex');
+  const { data, error } = await supabase
+    .from('categories')
+    .insert({ id, name: name.trim() })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return { id: data.id, name: data.name, createdAt: data.created_at };
 }
 
-export function updateCategory(id: string, name: string): DbCategory | null {
-  const db = readDB();
-  const cat = db.categories.find((c) => c.id === id);
-  if (!cat) return null;
-  cat.name = name.trim();
-  writeDB(db);
-  return cat;
+export async function updateCategory(id: string, name: string): Promise<DbCategory | null> {
+  const { data, error } = await supabase
+    .from('categories')
+    .update({ name: name.trim() })
+    .eq('id', id)
+    .select()
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? { id: data.id, name: data.name, createdAt: data.created_at } : null;
 }
 
-export function deleteCategory(id: string): boolean {
-  const db = readDB();
-  const before = db.categories.length;
-  db.categories = db.categories.filter((c) => c.id !== id);
-  if (db.categories.length === before) return false;
-  writeDB(db);
-  return true;
-}
-
-// ── Regenerate data/prompts.ts ────────────────────────────────────────────────
-
-function initials(name: string): string {
-  return name.split(/\s+/).map((w) => w[0] || '').join('').toUpperCase().slice(0, 2) || 'U';
-}
-
-function avatarColor(name: string): string {
-  const colors = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6'];
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % colors.length;
-  return colors[h];
-}
-
-export function regeneratePromptTs(db?: DB): void {
-  // Only published prompts go to gallery; featured ones sort first
-  const all = (db || readDB()).prompts;
-  const prompts = all
-    .filter((p) => p.published !== false)
-    .sort((a, b) => {
-      if (a.featured && !b.featured) return -1;
-      if (!a.featured && b.featured) return 1;
-      return b.createdAt.localeCompare(a.createdAt);
-    });
-  const total = prompts.length;
-  const lines: string[] = [
-    `import type { Prompt } from '@/lib/types';`,
-    ``,
-    `export const prompts: Prompt[] = [`,
-  ];
-
-  prompts.forEach((p, i) => {
-    // Prefer same-category prompts; fall back to others for variety
-    const sameCategory = prompts.filter((q) => q.category === p.category && q.id !== p.id);
-    const others       = prompts.filter((q) => q.category !== p.category && q.id !== p.id);
-    const pool = sameCategory.length >= 3 ? sameCategory : [...sameCategory, ...others];
-    const relIds = pool.length === 0 ? [] :
-      [0, Math.floor(pool.length / 3) || 1, Math.floor((2 * pool.length) / 3) || 2]
-        .slice(0, Math.min(3, pool.length))
-        .map((idx) => pool[Math.min(idx, pool.length - 1)].id);
-    const authorName = p.authorName || 'User';
-    const handle = (p.handle || '').replace(/^@/, '');
-    lines.push(`  {`);
-    lines.push(`    id: ${JSON.stringify(p.id)},`);
-    lines.push(`    promptText: ${JSON.stringify(p.promptText)},`);
-    lines.push(`    model: ${JSON.stringify(p.model)} as any,`);
-    lines.push(`    tab: ${JSON.stringify(p.tab)} as any,`);
-    lines.push(`    category: ${JSON.stringify(p.category)} as any,`);
-    lines.push(`    localImg: ${JSON.stringify(p.localImg)},`);
-    lines.push(`    gradientFrom: ${JSON.stringify(p.gradientFrom)},`);
-    lines.push(`    gradientTo: ${JSON.stringify(p.gradientTo)},`);
-    lines.push(`    aspectRatio: ${JSON.stringify(p.aspectRatio)},`);
-    lines.push(`    author: { name: ${JSON.stringify(authorName)}, handle: ${JSON.stringify('@' + handle)}, initials: ${JSON.stringify(initials(authorName))}, avatarColor: ${JSON.stringify(avatarColor(authorName))} },`);
-    lines.push(`    likes: ${p.likes || 0},`);
-    lines.push(`    views: ${p.views || 0},`);
-    lines.push(`    createdAt: ${JSON.stringify(p.createdAt.slice(0, 10))},`);
-    lines.push(`    relatedIds: ${JSON.stringify(relIds)},`);
-    lines.push(`  },`);
-  });
-
-  lines.push(`];`);
-  lines.push(``);
-  lines.push(`export function getPromptById(id: string) { return prompts.find((p) => p.id === id); }`);
-  lines.push(`export function getRelatedPrompts(ids: string[]) { return ids.map((id) => getPromptById(id)).filter(Boolean) as typeof prompts; }`);
-  lines.push(`export function getPromptsByTab(tab: string) { return tab === 'All' ? prompts : prompts.filter((p) => p.tab === tab); }`);
-  lines.push(``);
-
-  fs.writeFileSync(PROMPTS_TS, lines.join('\n'));
-}
-
-// ── Image helpers ─────────────────────────────────────────────────────────────
-
-export function saveUploadedImage(buffer: Buffer, ext: string): string {
-  if (!fs.existsSync(IMG_DIR)) fs.mkdirSync(IMG_DIR, { recursive: true });
-  const filename = `upload_${crypto.randomBytes(8).toString('hex')}.${ext}`;
-  fs.writeFileSync(path.join(IMG_DIR, filename), buffer);
-  return `/images/${filename}`;
+export async function deleteCategory(id: string): Promise<boolean> {
+  const { error, count } = await supabase
+    .from('categories')
+    .delete({ count: 'exact' })
+    .eq('id', id);
+  if (error) throw new Error(error.message);
+  return (count ?? 0) > 0;
 }
