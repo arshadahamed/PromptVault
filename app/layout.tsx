@@ -79,9 +79,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           ? { '@type': 'ImageObject', url: s.logoImageUrl }
           : undefined,
         sameAs: [
-          s.socialLinks?.twitter  ? `https://twitter.com/${s.socialLinks.twitter.split('/').pop()}` : undefined,
-          s.socialLinks?.github   ? s.socialLinks.github : undefined,
-          s.socialLinks?.youtube  ? s.socialLinks.youtube : undefined,
+          s.socialLinks?.twitter   ? `https://twitter.com/${s.socialLinks.twitter.split('/').pop()}` : undefined,
+          s.socialLinks?.github    ? s.socialLinks.github : undefined,
+          s.socialLinks?.instagram ? `https://instagram.com/${s.socialLinks.instagram.split('/').pop()}` : undefined,
         ].filter(Boolean),
       },
     ],
