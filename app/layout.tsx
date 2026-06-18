@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { getSettings } from '@/lib/settings';
 
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata(): Promise<Metadata> {
   const s = await getSettings();
 
@@ -49,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     icons: s.faviconUrl
       ? { icon: s.faviconUrl, shortcut: s.faviconUrl }
-      : { icon: '/icon.svg' },
+      : { icon: '/favicon.ico' },
   };
 }
 
