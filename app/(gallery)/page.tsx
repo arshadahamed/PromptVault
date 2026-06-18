@@ -1,55 +1,45 @@
-'use client';
-import { useState, useMemo } from 'react';
-import Link from 'next/link';
-import { type Tab, type Sort } from '@/lib/types';
-import { getPromptsByTab } from '@/data/prompts';
-import { TabBar } from '@/components/layout/TabBar';
-import { GalleryGrid } from '@/components/gallery/GalleryGrid';
-import { BottomDock } from '@/components/layout/BottomDock';
-import { FifaPromoCard } from '@/components/layout/FifaPromoCard';
+import { getAllPrompts } from '@/lib/db';
+import type { DbPrompt } from '@/lib/db';
+import type { Prompt } from '@/lib/types';
+import { GalleryClient } from './GalleryClient';
 
-export default function Home() {
-  const [tab, setTab] = useState<Tab>('All');
-  const [sort, setSort] = useState<Sort>('Featured');
+export const revalidate = 60;
 
-  const filtered = useMemo(() => {
-    const base = getPromptsByTab(tab);
-    if (sort === 'Popular') return [...base].sort((a, b) => b.likes - a.likes);
-    if (sort === 'Newest')
-      return [...base].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return base;
-  }, [tab, sort]);
+function toPrompt(p: DbPrompt): Prompt {
+  const name   = p.authorName || 'Admin';
+  const handle = p.handle.startsWith('@') ? p.handle : '@' + p.handle;
+  const words  = name.split(/\s+/);
+  const initials = words.map((w) => w[0] || '').join('').toUpperCase().slice(0, 2) || 'U';
+  const colors   = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6'];
+  let h = 0;
+  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % colors.length;
+  return {
+    id:           p.id,
+    author:       { name, handle, initials, avatarColor: colors[h] },
+    model:        p.model    as any,
+    category:     p.category as any,
+    tab:          p.tab      as any,
+    likes:        p.likes,
+    views:        p.views,
+    promptText:   p.promptText,
+    aspectRatio:  p.aspectRatio,
+    gradientFrom: p.gradientFrom,
+    gradientTo:   p.gradientTo,
+    localImg:     p.localImg,
+    relatedIds:   [],
+    createdAt:    p.createdAt.slice(0, 10),
+  };
+}
 
-  return (
-    <div className="relative">
-      {/* SEO content — visually hidden, crawlable */}
-      <div className="sr-only">
-        <h1>Free GPT Image 2 &amp; AI Prompt Gallery</h1>
-        <p>
-          Browse 750+ free AI prompts for ChatGPT, Midjourney, Gemini, Nanobanana, and more.
-          Copy any prompt and generate stunning AI images in one click.
-        </p>
-        <nav aria-label="Quick links">
-          <Link href="/?tab=ChatGPT">ChatGPT Prompts</Link>
-          <Link href="/?tab=Midjourney">Midjourney Prompts</Link>
-          <Link href="/?tab=Gemini">Gemini Prompts</Link>
-          <Link href="/?tab=Nanobanana">Nanobanana Prompts</Link>
-        </nav>
-      </div>
-
-      {/* Gallery */}
-      <div className="px-4 md:px-5 pt-4 md:pt-5 pb-28">
-        <TabBar
-          activeTab={tab}
-          onTab={setTab}
-          activeSort={sort}
-          onSort={setSort}
-        />
-        <GalleryGrid prompts={filtered} className="masonry-3" />
-      </div>
-
-      <BottomDock />
-      <FifaPromoCard />
-    </div>
-  );
+export default async function Home() {
+  const dbPrompts = await getAllPrompts();
+  const prompts   = dbPrompts
+    .filter((p) => p.published !== false)
+    .sort((a, b) => {
+      if (a.featured && !b.featured) return -1;
+      if (!a.featured && b.featured) return  1;
+      return b.createdAt.localeCompare(a.createdAt);
+    })
+    .map(toPrompt);
+  return <GalleryClient prompts={prompts} />;
 }
