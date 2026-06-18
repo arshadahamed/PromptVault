@@ -28,18 +28,23 @@ function mapItem(p: any): PromptItem {
 export function FavoritesModal({ open }: { open: boolean }) {
   const { favorites, toggleFavorite, closeModal } = useApp();
   const [items, setItems] = useState<PromptItem[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!favorites.length) { setItems([]); return; }
+    setLoading(true);
     fetch(`/api/prompts/batch?ids=${favorites.join(',')}`)
       .then((r) => r.ok ? r.json() : [])
       .then((data) => setItems((data as any[]).map(mapItem)))
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [favorites]);
 
   return (
     <ModalShell title="Favorites" open={open}>
-      {items.length === 0 ? (
+      {loading ? (
+        <p className="text-[13px] text-[#9ca3af] text-center mt-10">Loading…</p>
+      ) : items.length === 0 ? (
         <div className="text-center mt-10">
           <Heart size={28} className="mx-auto mb-2 text-[#d6d3cc]" />
           <p className="text-[13px] text-[#9ca3af]">

@@ -23,21 +23,24 @@ export function SearchModal({ open }: { open: boolean }) {
 
   useEffect(() => {
     if (!query.trim()) { setResults([]); return; }
-    const controller = new AbortController();
-    fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
-      .then((r) => r.ok ? r.json() : [])
-      .then((data) => setResults(data.map((p: any) => ({
-        id: p.id,
-        promptText: p.promptText || p.prompt_text || '',
-        model: p.model || '',
-        gradientFrom: p.gradientFrom || p.gradient_from || '#d4f5b4',
-        gradientTo: p.gradientTo || p.gradient_to || '#f5b4e8',
-        localImg: p.localImg || p.local_img || '',
-        authorName: p.authorName || p.author_name || 'Admin',
-        handle: p.handle || '@admin',
-      }))))
-      .catch(() => {});
-    return () => controller.abort();
+    const timer = setTimeout(() => {
+      const controller = new AbortController();
+      fetch(`/api/search?q=${encodeURIComponent(query)}`, { signal: controller.signal })
+        .then((r) => r.ok ? r.json() : [])
+        .then((data: any[]) => setResults(data.map((p) => ({
+          id: p.id,
+          promptText: p.prompt_text || '',
+          model: p.model || '',
+          gradientFrom: p.gradient_from || '#d4f5b4',
+          gradientTo: p.gradient_to || '#f5b4e8',
+          localImg: p.local_img || '',
+          authorName: p.author_name || 'Admin',
+          handle: p.handle || '@admin',
+        }))))
+        .catch(() => {});
+      return () => controller.abort();
+    }, 300);
+    return () => clearTimeout(timer);
   }, [query]);
 
   return (
