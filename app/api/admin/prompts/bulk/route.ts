@@ -10,6 +10,6 @@ export async function DELETE(req: NextRequest) {
   if (!Array.isArray(ids) || ids.length === 0)
     return NextResponse.json({ error: 'ids array required' }, { status: 400 });
 
-  const removed = bulkDeletePrompts(ids);
+  const removed = await bulkDeletePrompts(ids);
   return NextResponse.json({ removed });
 }

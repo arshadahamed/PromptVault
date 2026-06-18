@@ -6,8 +6,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
 
-  const { id } = await params;
-  const prompt = getPromptById(id);
+  const { id }   = await params;
+  const prompt   = await getPromptById(id);
   if (!prompt) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(prompt);
 }
@@ -16,9 +16,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
 
-  const { id } = await params;
-  const data = await req.json();
-  const updated = updatePrompt(id, data);
+  const { id }  = await params;
+  const data    = await req.json();
+  const updated = await updatePrompt(id, data);
   if (!updated) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(updated);
 }
@@ -28,7 +28,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (authErr) return authErr;
 
   const { id } = await params;
-  const ok = deletePrompt(id);
+  const ok     = await deletePrompt(id);
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

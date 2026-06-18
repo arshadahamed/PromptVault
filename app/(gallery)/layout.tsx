@@ -7,11 +7,11 @@ import { getSettings } from '@/lib/settings';
 import { verifyToken, COOKIE } from '@/lib/auth';
 
 export default async function GalleryLayout({ children }: { children: React.ReactNode }) {
-  const settings = getSettings();
+  const settings = await getSettings();
 
   const cookieStore = await cookies();
-  const token = cookieStore.get(COOKIE)?.value;
-  const isLoggedIn = token ? await verifyToken(token) : false;
+  const token       = cookieStore.get(COOKIE)?.value;
+  const isLoggedIn  = token ? await verifyToken(token) : false;
 
   return (
     <AppProvider>

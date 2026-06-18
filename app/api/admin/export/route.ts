@@ -6,15 +6,15 @@ export async function GET(req: NextRequest) {
   const deny = await requireAdmin(req);
   if (deny) return deny;
 
-  const format = req.nextUrl.searchParams.get('format') || 'json';
-  const prompts = getAllPrompts();
+  const format  = req.nextUrl.searchParams.get('format') || 'json';
+  const prompts = await getAllPrompts();
 
   if (format === 'csv') {
-    const cols = ['id','promptText','model','category','tab','authorName','handle','likes','views','featured','published','createdAt'];
-    const escape = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = [
+    const cols   = ['id','promptText','model','category','tab','authorName','handle','likes','views','featured','published','createdAt'];
+    const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const rows   = [
       cols.join(','),
-      ...prompts.map((p: any) => cols.map((c) => escape(p[c])).join(',')),
+      ...prompts.map((p) => cols.map((c) => escape((p as unknown as Record<string, unknown>)[c])).join(',')),
     ];
     return new NextResponse(rows.join('\n'), {
       headers: {

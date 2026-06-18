@@ -5,13 +5,13 @@ import { getSettings, saveSettings } from '@/lib/settings';
 export async function GET(req: NextRequest) {
   const deny = await requireAdmin(req);
   if (deny) return deny;
-  return NextResponse.json(getSettings());
+  return NextResponse.json(await getSettings());
 }
 
 export async function PUT(req: NextRequest) {
   const deny = await requireAdmin(req);
   if (deny) return deny;
-  const body = await req.json();
-  const updated = saveSettings(body);
+  const body    = await req.json();
+  const updated = await saveSettings(body);
   return NextResponse.json(updated);
 }

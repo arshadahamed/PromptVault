@@ -6,9 +6,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
 
-  const { id } = await params;
+  const { id }   = await params;
   const { name } = await req.json();
-  const cat = updateCategory(id, name);
+  const cat      = await updateCategory(id, name);
   if (!cat) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json(cat);
 }
@@ -18,7 +18,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (authErr) return authErr;
 
   const { id } = await params;
-  const ok = deleteCategory(id);
+  const ok     = await deleteCategory(id);
   if (!ok) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

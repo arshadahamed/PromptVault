@@ -6,7 +6,7 @@ export async function GET(req: NextRequest) {
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
 
-  return NextResponse.json(getAllCategories());
+  return NextResponse.json(await getAllCategories());
 }
 
 export async function POST(req: NextRequest) {
@@ -15,6 +15,6 @@ export async function POST(req: NextRequest) {
 
   const { name } = await req.json();
   if (!name?.trim()) return NextResponse.json({ error: 'Name required' }, { status: 400 });
-  const cat = createCategory(name);
+  const cat = await createCategory(name);
   return NextResponse.json(cat, { status: 201 });
 }

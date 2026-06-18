@@ -3,11 +3,11 @@ import './globals.css';
 import { getSettings } from '@/lib/settings';
 
 export async function generateMetadata(): Promise<Metadata> {
-  const s = getSettings();
+  const s = await getSettings();
   return {
-    title: s.metaTitle || s.siteName || 'PromptVault',
+    title:       s.metaTitle       || s.siteName || 'PromptVault',
     description: s.metaDescription || s.siteDescription || 'Browse free AI prompts.',
-    icons: s.faviconUrl ? { icon: s.faviconUrl } : undefined,
+    icons:       s.faviconUrl ? { icon: s.faviconUrl } : undefined,
   };
 }
 
