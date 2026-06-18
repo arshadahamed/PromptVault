@@ -36,7 +36,7 @@ export async function getSettings(): Promise<SiteSettings> {
     .select('data')
     .eq('id', 1)
     .maybeSingle();
-  if (!data) return defaultSettings();
+  if (!data || !data.data) return defaultSettings();
   return { ...defaultSettings(), ...(data.data as Partial<SiteSettings>) };
 }
 
