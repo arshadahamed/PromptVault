@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { saveUploadedImage } from '@/lib/db';
+import { PutObjectCommand } from '@aws-sdk/client-s3';
+import crypto from 'crypto';
+import { r2, R2_BUCKET, R2_PUBLIC_URL } from '@/lib/r2';
 import { requireAdmin } from '@/lib/admin-auth';
 
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -16,20 +18,31 @@ export async function POST(req: NextRequest) {
   if (authErr) return authErr;
 
   const formData = await req.formData();
-  const file = formData.get('file') as File | null;
+  const file     = formData.get('file') as File | null;
   if (!file) return NextResponse.json({ error: 'No file' }, { status: 400 });
 
   if (file.size > MAX_SIZE) {
     return NextResponse.json({ error: 'File too large (max 10 MB)' }, { status: 400 });
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-
+  const buffer   = Buffer.from(await file.arrayBuffer());
   const detected = MAGIC.find((m) => m.check(buffer));
   if (!detected) {
-    return NextResponse.json({ error: 'Unsupported file type. Upload PNG, JPEG, GIF, or WebP.' }, { status: 400 });
+    return NextResponse.json(
+      { error: 'Unsupported file type. Upload PNG, JPEG, GIF, or WebP.' },
+      { status: 400 }
+    );
   }
 
-  const localImg = saveUploadedImage(buffer, detected.ext);
+  const filename = `upload_${crypto.randomBytes(8).toString('hex')}.${detected.ext}`;
+
+  await r2.send(new PutObjectCommand({
+    Bucket:      R2_BUCKET,
+    Key:         filename,
+    Body:        buffer,
+    ContentType: detected.mime,
+  }));
+
+  const localImg = `${R2_PUBLIC_URL}/${filename}`;
   return NextResponse.json({ localImg });
 }
