@@ -1,4 +1,6 @@
 import { timingSafeEqual } from 'crypto';
+import bcrypt from 'bcryptjs';
+import { supabase } from './supabase';
 
 export const COOKIE = 'meigen_admin';
 const TTL = 60 * 60 * 24 * 7;
@@ -60,9 +62,19 @@ function safeEq(a: string, b: string): boolean {
   return timingSafeEqual(A, B);
 }
 
-export function checkCredentials(username: string, password: string): boolean {
+export async function checkCredentials(username: string, password: string): Promise<boolean> {
   const adminUser = process.env.ADMIN_USERNAME;
+  if (!adminUser) return false;
+  if (!safeEq(username, adminUser)) return false;
+
+  // Check dedicated credentials table for a bcrypt hash set via the UI
+  try {
+    const { data } = await supabase.from('admin_credentials').select('password_hash').eq('id', 1).maybeSingle();
+    if (data?.password_hash) return bcrypt.compare(password, data.password_hash);
+  } catch { /* fall through to env var */ }
+
+  // Fall back to ADMIN_PASSWORD env var (plain-text, set at deploy time)
   const adminPass = process.env.ADMIN_PASSWORD;
-  if (!adminUser || !adminPass) return false;
-  return safeEq(username, adminUser) && safeEq(password, adminPass);
+  if (!adminPass) return false;
+  return safeEq(password, adminPass);
 }

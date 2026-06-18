@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Globe, Image as ImageIcon, Type, Link as LinkIcon, Copyright,
-  Share2, Check, Loader2, Palette, Bell, RefreshCw, Upload, LayoutDashboard, Megaphone, LogIn,
+  Share2, Check, Loader2, Palette, Bell, RefreshCw, Upload, LayoutDashboard, Megaphone, LogIn, KeyRound, Eye, EyeOff,
 } from 'lucide-react';
 import { useAdminTheme, tk } from '@/context/AdminThemeContext';
 
@@ -85,6 +85,31 @@ export default function SettingsPage() {
     if (!res.ok) { setError('Failed to save settings.'); return; }
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
+  }
+
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
+  const [pwShow, setPwShow] = useState({ current: false, next: false, confirm: false });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [pwSaved, setPwSaved] = useState(false);
+
+  async function changePassword(e: React.FormEvent) {
+    e.preventDefault();
+    setPwError(''); setPwSaved(false);
+    if (pwForm.next !== pwForm.confirm) { setPwError('New passwords do not match.'); return; }
+    if (pwForm.next.length < 8) { setPwError('New password must be at least 8 characters.'); return; }
+    setPwSaving(true);
+    const res = await fetch('/api/admin/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
+    });
+    const data = await res.json();
+    setPwSaving(false);
+    if (!res.ok) { setPwError(data.error ?? 'Failed to change password.'); return; }
+    setPwSaved(true);
+    setPwForm({ current: '', next: '', confirm: '' });
+    setTimeout(() => setPwSaved(false), 3000);
   }
 
   const card = { background: dark ? 'rgba(255,255,255,0.03)' : '#ffffff', border: `1px solid ${t.cardBorder}`, borderRadius: '16px' };
@@ -559,6 +584,57 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+        </Section>
+
+        {/* ── Security / Password ───────────────────── */}
+        <Section icon={KeyRound} label="Security" t={t} dark={dark}>
+          <form onSubmit={changePassword} className="flex flex-col gap-4 max-w-md">
+            <p className="text-[12px]" style={{ color: t.textMuted }}>
+              Change your admin panel login password.
+            </p>
+            {(['current', 'next', 'confirm'] as const).map((field) => {
+              const labels = { current: 'Current Password', next: 'New Password', confirm: 'Confirm New Password' };
+              return (
+                <Field key={field} label={labels[field]} style={lbl}>
+                  <div className="relative">
+                    <input
+                      type={pwShow[field] ? 'text' : 'password'}
+                      value={pwForm[field]}
+                      onChange={e => setPwForm(f => ({ ...f, [field]: e.target.value }))}
+                      placeholder="••••••••"
+                      style={{ ...inp, paddingRight: '40px' }}
+                      onFocus={e => (e.target.style.borderColor = t.inputFocus)}
+                      onBlur={e => (e.target.style.borderColor = t.inputBorder)}
+                    />
+                    <button type="button"
+                      onClick={() => setPwShow(s => ({ ...s, [field]: !s[field] }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer"
+                      style={{ color: t.textSub }}>
+                      {pwShow[field] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </Field>
+              );
+            })}
+            {pwError && (
+              <div className="px-3 py-2 rounded-lg text-[12px]"
+                style={{ background: t.danger, border: `1px solid ${t.dangerBorder}`, color: t.dangerText }}>
+                {pwError}
+              </div>
+            )}
+            <div>
+              <button type="submit" disabled={pwSaving}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-semibold text-white transition-all cursor-pointer disabled:opacity-60"
+                style={{
+                  background: pwSaved ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#7c3aed,#4f46e5)',
+                  boxShadow: pwSaved ? '0 4px 16px rgba(16,185,129,0.3)' : '0 4px 16px rgba(124,58,237,0.3)',
+                }}>
+                {pwSaved   ? <><Check size={13} />Password changed!</>
+                 : pwSaving ? <><Loader2 size={13} className="animate-spin" />Saving…</>
+                 : <><KeyRound size={13} />Change Password</>}
+              </button>
+            </div>
+          </form>
         </Section>
 
         {/* Error */}

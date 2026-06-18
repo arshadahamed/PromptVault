@@ -3,7 +3,7 @@ import { checkCredentials, createToken, COOKIE } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   const { username, password } = await req.json();
-  if (!checkCredentials(username, password)) {
+  if (!(await checkCredentials(username, password))) {
     return NextResponse.json({ error: 'Invalid credentials' }, { status: 401 });
   }
   const token = await createToken();

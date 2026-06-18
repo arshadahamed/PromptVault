@@ -1,10 +1,40 @@
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { supabase } from '@/lib/supabase';
 import type { DbPrompt } from '@/lib/db';
 import type { Prompt } from '@/lib/types';
 import { PromptDetail } from '@/components/prompt/PromptDetail';
+import { getSettings } from '@/lib/settings';
 
 export const dynamic = 'force-dynamic';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const [{ data: row }, s] = await Promise.all([
+    supabase.from('prompts').select('prompt_text,local_img,model,category').eq('id', id).eq('published', true).maybeSingle(),
+    getSettings(),
+  ]);
+  if (!row) return {};
+  const title       = `${(row.prompt_text as string).slice(0, 60).trimEnd()}… — ${s.siteName || 'PromptVault'}`;
+  const description = `${row.model} prompt in ${row.category}: ${(row.prompt_text as string).slice(0, 140)}`;
+  const image       = (row.local_img as string) || undefined;
+  const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL || 'https://prompt-vault-seven-eta.vercel.app';
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      url: `${siteUrl}/prompt/${id}`,
+      images: image ? [{ url: image, alt: title }] : [],
+    },
+    twitter: { card: 'summary_large_image', title, description, images: image ? [image] : [] },
+  };
+}
 
 function toPrompt(p: DbPrompt): Prompt {
   const name   = p.authorName || 'Admin';
