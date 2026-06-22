@@ -63,11 +63,13 @@ existing `scripts/migrate-to-supabase.mjs`:
 - Manual `.env.local` loader (same code block).
 - Supabase **service-role** client (`@supabase/supabase-js`).
 - R2 **S3 client** (`@aws-sdk/client-s3`).
-- meigen API driven from inside a **stealth Chromium** page
-  (`playwright-extra` + `playwright-extra-plugin-stealth`, already deps) —
-  navigate once to `https://www.meigen.ai/` to obtain Cloudflare clearance, then
-  run the paging fetch loop via `page.evaluate(fetch ...)`, which is proven to
-  return 200 in recon.
+- meigen API driven from inside a **headless Chromium** page (`playwright`,
+  already a dep) — navigate once to `https://www.meigen.ai/` to obtain Cloudflare
+  clearance, then run the paging fetch loop via `page.evaluate(fetch ...)`.
+  Verified: plain `chromium.launch({headless:true})` with a desktop UA returns
+  **200** on both the root and `/api/images`; no stealth plugin needed. (The
+  installed `playwright-extra-plugin-stealth@0.0.1` is a broken/squatted package
+  that throws on import — **not used**.)
 
 ### Data flow
 
