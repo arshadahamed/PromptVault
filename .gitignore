@@ -43,5 +43,3 @@ next-env.d.ts
 # uploaded prompt images (2GB+ — too large for git)
 /public/images/
 
-# one-time build scripts and cache
-/scripts/
