@@ -52,3 +52,44 @@ export function makeIdSequencer(maxExistingNum) {
   let n = maxExistingNum;
   return () => 'p' + String(++n).padStart(4, '0');
 }
+
+export function isIngestable(item) {
+  return item?.promptReady === true && typeof item.prompt === 'string' && item.prompt.trim().length > 0;
+}
+
+export function mapItemToRow(item, { id, r2PublicUrl }) {
+  const { model, tab, category, unmapped } = mapModel(item.model);
+  const { gradientFrom, gradientTo } = gradientForId(item.id);
+  const base = r2PublicUrl.replace(/\/$/, '');
+  const row = {
+    id,
+    source_id:     String(item.id),
+    prompt_text:   item.prompt,
+    image_url:     item.image || '',
+    local_img:     `${base}/${item.id}.jpg`,
+    author_name:   item.author?.name || 'Unknown',
+    handle:        item.author?.username || '',
+    model, tab, category,
+    likes:         item.stats?.likes ?? 0,
+    views:         item.stats?.views ?? 0,
+    gradient_from: gradientFrom,
+    gradient_to:   gradientTo,
+    aspect_ratio:  aspectRatio(item.imageWidth, item.imageHeight),
+    featured:      false,
+    published:     true,
+  };
+  return { row, unmapped };
+}
+
+export function parseArgs(argv) {
+  const out = { dryRun: false, limit: null, sort: 'newest' };
+  for (const a of argv) {
+    if (a === '--dry-run') out.dryRun = true;
+    else if (a.startsWith('--limit=')) out.limit = parseInt(a.slice('--limit='.length), 10);
+    else if (a.startsWith('--sort=')) out.sort = a.slice('--sort='.length);
+  }
+  if (!['newest', 'featured', 'popular'].includes(out.sort)) {
+    throw new Error(`invalid --sort: ${out.sort} (use newest|featured|popular)`);
+  }
+  return out;
+}
