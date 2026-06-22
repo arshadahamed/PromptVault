@@ -208,48 +208,51 @@ export async function main() {
   let scanned = 0, uploaded = 0, offset = 0, stop = false;
   const LIMIT = args.limit ?? Infinity;
 
-  while (!stop) {
-    let body;
-    try { body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
-    catch (e) { await SLEEP(2000); body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
-    const items = body.images || [];
-    if (items.length === 0) break;
+  try {
+    while (!stop) {
+      let body;
+      try { body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
+      catch (e) { await SLEEP(2000); body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
+      const items = body.images || [];
+      if (items.length === 0) break;
 
-    let newOnPage = 0;
-    for (const item of items) {
-      scanned++;
-      const sid = String(item.id);
-      if (seen.has(sid) || !isIngestable(item)) continue;
-      seen.add(sid);
-      newOnPage++;
-      const id = nextId();
-      const { row, unmapped } = mapItemToRow(item, { id, r2PublicUrl: R2_PUBLIC_URL });
-      if (unmapped) unmappedModels.add(item.model || '(empty)');
+      let newOnPage = 0;
+      for (const item of items) {
+        scanned++;
+        const sid = String(item.id);
+        if (seen.has(sid) || !isIngestable(item)) continue;
+        seen.add(sid);
+        newOnPage++;
+        const id = nextId();
+        const { row, unmapped } = mapItemToRow(item, { id, r2PublicUrl: R2_PUBLIC_URL });
+        if (unmapped) unmappedModels.add(item.model || '(empty)');
 
-      if (!args.dryRun) {
-        const key = `${sid}.jpg`;
-        if (!(await objectExists(r2, { bucket: R2_BUCKET, key }))) {
-          try {
-            const res = await fetch(item.image);
-            if (res.ok) {
-              const buf = Buffer.from(await res.arrayBuffer());
-              await uploadImageToR2(r2, { bucket: R2_BUCKET, sourceId: sid, buffer: buf });
-              uploaded++;
-            } else { console.warn(`  image ${sid}: HTTP ${res.status}`); }
-          } catch (e) { console.warn(`  image ${sid}: ${e.message}`); }
+        if (!args.dryRun) {
+          const key = `${sid}.jpg`;
+          if (!(await objectExists(r2, { bucket: R2_BUCKET, key }))) {
+            try {
+              const res = await fetch(item.image);
+              if (res.ok) {
+                const buf = Buffer.from(await res.arrayBuffer());
+                await uploadImageToR2(r2, { bucket: R2_BUCKET, sourceId: sid, buffer: buf });
+                uploaded++;
+              } else { console.warn(`  image ${sid}: HTTP ${res.status}`); }
+            } catch (e) { console.warn(`  image ${sid}: ${e.message}`); }
+          }
         }
+        newRows.push(row);
+        if (newRows.length >= LIMIT) { stop = true; break; }
       }
-      newRows.push(row);
-      if (newRows.length >= LIMIT) { stop = true; break; }
+      const skipped = scanned - newRows.length;
+      process.stdout.write(`\r  scanned ${scanned}, new ${newRows.length}, skipped ${skipped}, uploaded ${uploaded}`);
+      if (!stop && newOnPage === 0 && args.sort === 'newest') { stop = true; } // incremental stop
+      if (!stop && !body.hasMore) stop = true;
+      offset += 20;
+      await SLEEP(400);
     }
-    process.stdout.write(`\r  scanned ${scanned}, new ${newRows.length}, uploaded ${uploaded}`);
-    if (!stop && newOnPage === 0 && args.sort === 'newest') { stop = true; } // incremental stop
-    if (!stop && !body.hasMore) stop = true;
-    offset += 20;
-    await SLEEP(400);
+  } finally {
+    await browser.close(); // runs even if page fetch throws after exhausting retries
   }
-  console.log('');
-  await browser.close(); // closes all contexts
 
   if (unmappedModels.size) console.log(`  unmapped models -> ChatGPT fallback: ${[...unmappedModels].join(', ')}`);
 
@@ -260,12 +263,16 @@ export async function main() {
     return;
   }
 
-  console.log(`\nUpserting ${newRows.length} prompts...`);
+  const skipped = scanned - newRows.length;
+  console.log(`\nUpserting ${newRows.length} prompts (scanned ${scanned}, skipped ${skipped})...`);
   let inserted = 0;
   const BATCH = 100;
   for (let i = 0; i < newRows.length; i += BATCH) {
     const batch = newRows.slice(i, i + BATCH);
     const { error } = await supabase.from('prompts').upsert(batch, { onConflict: 'source_id' });
+    // On batch error: images already uploaded to R2 are orphaned but harmless —
+    // the next run re-picks these source_ids (absent from DB), skips the R2 upload
+    // (key exists), and retries the insert. Self-healing across runs.
     if (error) console.warn(`  batch ${i}: ${error.message}`);
     else { inserted += batch.length; process.stdout.write(`\r  ${inserted}/${newRows.length}`); }
   }
