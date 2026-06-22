@@ -190,10 +190,18 @@ export async function main() {
   console.log(`  ${seen.size} existing source_ids, max id = p${String(maxNum).padStart(4,'0')}`);
   const nextId = makeIdSequencer(maxNum);
 
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36';
   const browser = await chromium.launch({ headless: true });
-  const ctx = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36' });
-  const page = await ctx.newPage();
-  await page.goto('https://www.meigen.ai/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+  // Cloudflare bot detection tracks API calls within a session; a fresh context
+  // (new clearance token) per page bypasses that pattern reliably.
+  const fetchPageFresh = async (params) => {
+    const ctx = await browser.newContext({ userAgent: UA });
+    const page = await ctx.newPage();
+    await page.goto('https://www.meigen.ai/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    try { return await fetchPage(page, params); }
+    finally { await ctx.close(); }
+  };
 
   const newRows = [];
   const unmappedModels = new Set();
@@ -202,8 +210,8 @@ export async function main() {
 
   while (!stop) {
     let body;
-    try { body = await fetchPage(page, { sort: args.sort, offset, limit: 20 }); }
-    catch (e) { await SLEEP(1500); body = await fetchPage(page, { sort: args.sort, offset, limit: 20 }); }
+    try { body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
+    catch (e) { await SLEEP(2000); body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
     const items = body.images || [];
     if (items.length === 0) break;
 
@@ -241,7 +249,7 @@ export async function main() {
     await SLEEP(400);
   }
   console.log('');
-  await browser.close();
+  await browser.close(); // closes all contexts
 
   if (unmappedModels.size) console.log(`  unmapped models -> ChatGPT fallback: ${[...unmappedModels].join(', ')}`);
 
