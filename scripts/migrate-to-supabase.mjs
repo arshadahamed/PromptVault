@@ -68,12 +68,17 @@ console.log('\n[2/4] Inserting prompts...');
 let pOk = 0, pSkip = 0;
 const BATCH = 100;
 for (let i = 0; i < prompts.length; i += BATCH) {
-  const batch = prompts.slice(i, i + BATCH).map((p) => ({
+  const batch = prompts.slice(i, i + BATCH).map((p) => {
+    const rawImg = p.localImg || '';
+    const localImg = rawImg.startsWith('/images/')
+      ? `${R2_PUBLIC_URL}/${rawImg.slice('/images/'.length)}`
+      : rawImg;
+    return {
     id:           p.id,
     source_id:    p.sourceId   ?? null,
     prompt_text:  p.promptText || '',
     image_url:    p.imageUrl   || '',
-    local_img:    p.localImg   || '',
+    local_img:    localImg,
     author_name:  p.authorName || 'Admin',
     handle:       p.handle     || '@admin',
     model:        p.model      || 'ChatGPT',
@@ -88,7 +93,8 @@ for (let i = 0; i < prompts.length; i += BATCH) {
     published:    p.published ?? true,
     created_at:   p.createdAt || new Date().toISOString(),
     updated_at:   p.updatedAt || new Date().toISOString(),
-  }));
+  };
+  });
   const { error } = await supabase.from('prompts').upsert(batch);
   if (error) {
     console.warn(`  ⚠ batch ${i}–${i + batch.length}: ${error.message}`);
@@ -108,44 +114,7 @@ const { error: sErr } = await supabase
 if (sErr) console.warn(`  ⚠ settings: ${sErr.message}`);
 else      console.log('  ✓ settings saved');
 
-// 4. Upload images to R2 and update local_img in Supabase
-const imgDir = join(root, 'public', 'images');
-const imageExists = existsSync(imgDir);
-if (!imageExists) {
-  console.log('\n[4/4] No public/images directory found — skipping image upload');
-} else {
-  const files = readdirSync(imgDir);
-  console.log(`\n[4/4] Uploading ${files.length} images to R2...`);
-  let imgOk = 0, imgSkip = 0;
-
-  for (const file of files) {
-    try {
-      const { readFileSync: rfs } = await import('fs');
-      const buf  = rfs(join(imgDir, file));
-      const ext  = file.split('.').pop()?.toLowerCase() || '';
-      const mime = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' }[ext] || 'application/octet-stream';
-
-      await r2.send(new PutObjectCommand({
-        Bucket:      R2_BUCKET,
-        Key:         file,
-        Body:        buf,
-        ContentType: mime,
-      }));
-
-      const newUrl = `${R2_PUBLIC_URL}/${file}`;
-      await supabase
-        .from('prompts')
-        .update({ local_img: newUrl })
-        .eq('local_img', `/images/${file}`);
-
-      imgOk++;
-      if (imgOk % 50 === 0) process.stdout.write(`\r  ✓ ${imgOk}/${files.length}`);
-    } catch (e) {
-      console.warn(`\n  ⚠ ${file}: ${e.message}`);
-      imgSkip++;
-    }
-  }
-  console.log(`\n  Done: ${imgOk} uploaded, ${imgSkip} failed`);
-}
+// 4. Image upload skipped — images already in R2, local_img URLs fixed during step 2
+console.log('\n[4/4] Images already in R2 — skipping upload');
 
 console.log('\n=== Migration complete ===\n');
