@@ -2,8 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mapModel, GRADIENTS, gradientForId, aspectRatio, makeIdSequencer, maxPromptNum,
-  mapItemToRow, isIngestable, parseArgs,
+  mapItemToRow, parseArgs,
+  // New helpers
+  isIngestableOrFallback, withBackoff,
 } from './scrape-meigen.mjs';
+
+// ─── Legacy tests (unchanged) ─────────────────────────────────────────────────
 
 test('mapModel: known models', () => {
   assert.deepEqual(mapModel('GPT Image'), { model: 'ChatGPT', tab: 'ChatGPT', category: 'ChatGPT', unmapped: false });
@@ -55,12 +59,6 @@ const SAMPLE = {
   imageWidth: 676, imageHeight: 1200,
 };
 
-test('isIngestable', () => {
-  assert.equal(isIngestable(SAMPLE), true);
-  assert.equal(isIngestable({ ...SAMPLE, promptReady: false }), false);
-  assert.equal(isIngestable({ ...SAMPLE, prompt: '   ' }), false);
-  assert.equal(isIngestable({ ...SAMPLE, prompt: undefined }), false);
-});
 
 test('mapItemToRow: full mapping', () => {
   const { row, unmapped } = mapItemToRow(SAMPLE, { id: 'p1978', r2PublicUrl: 'https://pub-x.r2.dev' });
@@ -92,9 +90,87 @@ test('mapItemToRow: missing author/stats fall back', () => {
   assert.equal(row.views, 0);
 });
 
-test('parseArgs', () => {
+test('parseArgs (legacy: newest|featured|popular)', () => {
   assert.deepEqual(parseArgs([]), { dryRun: false, limit: null, sort: 'newest' });
   assert.deepEqual(parseArgs(['--dry-run', '--limit=50', '--sort=featured']),
     { dryRun: true, limit: 50, sort: 'featured' });
   assert.throws(() => parseArgs(['--sort=bogus']), /sort/);
+});
+
+// ─── New tests ────────────────────────────────────────────────────────────────
+
+test('parseArgs: --sort=all and --sort=popular', () => {
+  assert.deepEqual(parseArgs(['--sort=all']), { dryRun: false, limit: null, sort: 'all' });
+  assert.deepEqual(parseArgs(['--sort=popular']), { dryRun: false, limit: null, sort: 'popular' });
+});
+
+test('isIngestableOrFallback: promptReady=true returns ok=true, needsFallback=false', () => {
+  const result = isIngestableOrFallback(SAMPLE);
+  assert.deepEqual(result, { ok: true, needsFallback: false });
+});
+
+test('isIngestableOrFallback: promptReady=false but has image → needsFallback=true', () => {
+  const item = { ...SAMPLE, promptReady: false };
+  const result = isIngestableOrFallback(item);
+  assert.deepEqual(result, { ok: true, needsFallback: true });
+});
+
+test('isIngestableOrFallback: promptReady=false and empty prompt but still has image', () => {
+  const item = { ...SAMPLE, promptReady: false, prompt: '' };
+  const result = isIngestableOrFallback(item);
+  assert.deepEqual(result, { ok: true, needsFallback: true });
+});
+
+test('isIngestableOrFallback: no image and no prompt → ok=false', () => {
+  const item = { ...SAMPLE, promptReady: false, image: '' };
+  const result = isIngestableOrFallback(item);
+  assert.deepEqual(result, { ok: false, needsFallback: false });
+});
+
+test('isIngestableOrFallback: null item → ok=false', () => {
+  assert.deepEqual(isIngestableOrFallback(null), { ok: false, needsFallback: false });
+  assert.deepEqual(isIngestableOrFallback(undefined), { ok: false, needsFallback: false });
+});
+
+test('isIngestableOrFallback: whitespace-only prompt with promptReady=true → needsFallback=true', () => {
+  const item = { ...SAMPLE, prompt: '   ', promptReady: true };
+  const result = isIngestableOrFallback(item);
+  // promptReady=true but prompt is blank — treated as needing fallback
+  assert.deepEqual(result, { ok: true, needsFallback: true });
+});
+
+test('withBackoff: succeeds on first attempt', async () => {
+  let calls = 0;
+  const result = await withBackoff(async () => { calls++; return 'ok'; }, { maxAttempts: 3, baseMs: 1 });
+  assert.equal(result, 'ok');
+  assert.equal(calls, 1);
+});
+
+test('withBackoff: succeeds after one failure', async () => {
+  let calls = 0;
+  const result = await withBackoff(async () => {
+    calls++;
+    if (calls < 2) throw new Error('transient');
+    return 'ok';
+  }, { maxAttempts: 3, baseMs: 1 });
+  assert.equal(result, 'ok');
+  assert.equal(calls, 2);
+});
+
+test('withBackoff: throws after all attempts exhausted', async () => {
+  let calls = 0;
+  await assert.rejects(
+    () => withBackoff(async () => { calls++; throw new Error('permanent'); }, { maxAttempts: 3, baseMs: 1 }),
+    /permanent/
+  );
+  assert.equal(calls, 3);
+});
+
+test('withBackoff: respects maxAttempts=1 (no retry)', async () => {
+  let calls = 0;
+  await assert.rejects(
+    () => withBackoff(async () => { calls++; throw new Error('err'); }, { maxAttempts: 1, baseMs: 1 }),
+    /err/
+  );
+  assert.equal(calls, 1);
 });

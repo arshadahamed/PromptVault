@@ -42,4 +42,5 @@ next-env.d.ts
 
 # uploaded prompt images (2GB+ — too large for git)
 /public/images/
+scripts/sync-log.json
 

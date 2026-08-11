@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "sync": "node scripts/scrape-meigen.mjs --sort=all",
+    "sync:dry": "node scripts/scrape-meigen.mjs --sort=all --dry-run",
+    "sync:test": "node --test scripts/scrape-meigen.test.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1071.0",

@@ -125,11 +125,6 @@ export function PromptCard({ prompt }: { prompt: Prompt }) {
           </AnimatePresence>
         </div>
       </Link>
-
-      {/* Prompt snippet below image */}
-      <p className="mt-1.5 px-0.5 text-[12px] text-[#6b7280] leading-snug line-clamp-2">
-        {prompt.promptText.slice(0, 120)}
-      </p>
     </div>
   );
 }

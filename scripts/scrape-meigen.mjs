@@ -1,13 +1,40 @@
-import { readFileSync } from 'fs';
+/**
+ * meigen.ai → PromptVault Supabase sync
+ *
+ * Pipeline:
+ *   1. Load existing source_ids from Supabase (dedup gate).
+ *   2. For each sort order (newest | featured | popular | all):
+ *        a. Open meigen.ai in a headless Playwright context (bypasses Cloudflare).
+ *        b. Call GET /api/images?sort=&offset=&limit= via page.evaluate (same-origin).
+ *        c. For each new item:
+ *             - If promptReady=true → ingest directly.
+ *             - If promptReady=false but has an image → open detail page and scrape prompt (fallback).
+ *             - Otherwise → skip.
+ *        d. Upload image to Cloudflare R2 (skipped if key already exists).
+ *        e. Stop the sort when N consecutive all-seen pages are encountered.
+ *   3. Upsert all collected rows into Supabase in batches of 100.
+ *   4. Write a local sync-log.json and upsert a sync_runs row (non-fatal if table missing).
+ *
+ * Usage:
+ *   node scripts/scrape-meigen.mjs [--sort=newest|featured|popular|all] [--limit=N] [--dry-run]
+ */
+
+import { readFileSync, existsSync, appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import { chromium } from 'playwright';
 
-// --- Pure helpers (exported for tests) ---
+// ─── Module-level constants ──────────────────────────────────────────────────
 
-// meigen model string -> our { model, tab, category }. Prefix/keyword match, case-insensitive.
+const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms));
+const SLEEP_MS = 400;              // polite inter-page delay
+const EMPTY_PAGES_BEFORE_STOP = 3; // stop sort after N consecutive all-seen pages
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36';
+
+// ─── Pure helpers (exported for unit tests) ──────────────────────────────────
+
 const MODEL_RULES = [
   { test: /^(gpt image|chatgpt|dall)/i, model: 'ChatGPT',        tab: 'ChatGPT',     category: 'ChatGPT' },
   { test: /^nanobanana/i,               model: 'Nanobanana Pro', tab: 'Nanobanana',  category: 'Nanobanana' },
@@ -25,7 +52,7 @@ export function mapModel(meigenModel) {
   return { model: 'ChatGPT', tab: 'ChatGPT', category: 'ChatGPT', unmapped: true };
 }
 
-// Pastel palette as stored in data/db.json (NOT lib/utils.ts vivid palette).
+// Pastel palette as stored in data/db.json
 export const GRADIENTS = [
   ['#b4d4f5', '#f5d4b4'], ['#b4d4e8', '#f5c7b4'], ['#c7b4e8', '#f5f0b4'],
   ['#f5e8b4', '#b4c7f5'], ['#e8b4b8', '#c7e3f5'], ['#e8c7b4', '#b4b4f5'],
@@ -60,8 +87,47 @@ export function makeIdSequencer(maxExistingNum) {
   return () => 'p' + String(++n).padStart(4, '0');
 }
 
-export function isIngestable(item) {
-  return item?.promptReady === true && typeof item.prompt === 'string' && item.prompt.trim().length > 0;
+/**
+ * Determines whether an item can be ingested, and whether a DOM fallback is needed.
+ *
+ * - ok=true, needsFallback=false  → item has promptReady=true and a non-empty prompt
+ * - ok=true, needsFallback=true   → item is missing prompt but has an image; scrape detail page
+ * - ok=false                      → item has no usable data; skip entirely
+ */
+export function isIngestableOrFallback(item) {
+  if (!item || typeof item !== 'object') return { ok: false, needsFallback: false };
+  const hasPrompt = item.promptReady === true &&
+    typeof item.prompt === 'string' &&
+    item.prompt.trim().length > 0;
+  if (hasPrompt) return { ok: true, needsFallback: false };
+
+  // No ready prompt — can we at least scrape the detail page?
+  const hasImage = typeof item.image === 'string' && item.image.trim().length > 0;
+  const hasId    = typeof item.id === 'string' && item.id.trim().length > 0;
+  if (hasImage && hasId) return { ok: true, needsFallback: true };
+
+  return { ok: false, needsFallback: false };
+}
+
+/**
+ * Wraps an async fn with exponential back-off.
+ * Attempts: maxAttempts total. Delays: baseMs, baseMs*3, baseMs*9, …
+ * Re-throws after final failure.
+ */
+export async function withBackoff(fn, { maxAttempts = 3, baseMs = 2000 } = {}) {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < maxAttempts) {
+        const delay = baseMs * Math.pow(3, attempt - 1);
+        await SLEEP(delay);
+      }
+    }
+  }
+  throw lastErr;
 }
 
 export function mapItemToRow(item, { id, r2PublicUrl }) {
@@ -71,7 +137,7 @@ export function mapItemToRow(item, { id, r2PublicUrl }) {
   const row = {
     id,
     source_id:     String(item.id),
-    prompt_text:   item.prompt,
+    prompt_text:   (item.prompt || '').trim(),
     image_url:     item.image || '',
     local_img:     `${base}/${item.id}.jpg`,
     author_name:   item.author?.name || 'Unknown',
@@ -88,6 +154,12 @@ export function mapItemToRow(item, { id, r2PublicUrl }) {
   return { row, unmapped };
 }
 
+/**
+ * Parses CLI args.
+ * --sort=newest|featured|popular|all   (default: newest)
+ * --limit=N                            (default: unlimited)
+ * --dry-run
+ */
 export function parseArgs(argv) {
   const out = { dryRun: false, limit: null, sort: 'newest' };
   for (const a of argv) {
@@ -95,15 +167,20 @@ export function parseArgs(argv) {
     else if (a.startsWith('--limit=')) out.limit = parseInt(a.slice('--limit='.length), 10);
     else if (a.startsWith('--sort=')) out.sort = a.slice('--sort='.length);
   }
-  if (!['newest', 'featured', 'popular'].includes(out.sort)) {
-    throw new Error(`invalid --sort: ${out.sort} (use newest|featured|popular)`);
+  const VALID_SORTS = ['newest', 'featured', 'popular', 'all'];
+  if (!VALID_SORTS.includes(out.sort)) {
+    throw new Error(`invalid --sort: ${out.sort} (use ${VALID_SORTS.join('|')})`);
   }
   return out;
 }
 
-// --- Infrastructure functions (exported for external re-use) ---
+// ─── Infrastructure helpers (exported for external re-use) ────────────────────
 
-const REQUIRED_ENV = ['SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','CLOUDFLARE_ACCOUNT_ID','R2_ACCESS_KEY_ID','R2_SECRET_ACCESS_KEY','R2_BUCKET_NAME','R2_PUBLIC_URL'];
+const REQUIRED_ENV = [
+  'SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY',
+  'CLOUDFLARE_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET_NAME', 'R2_PUBLIC_URL',
+];
 
 export function loadEnv(rootDir) {
   try {
@@ -165,120 +242,345 @@ export async function uploadImageToR2(r2, { bucket, sourceId, buffer }) {
   }));
 }
 
-// --- Main orchestration ---
+// ─── Fallback DOM scraper ─────────────────────────────────────────────────────
 
-const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms));
+/**
+ * Opens the meigen.ai detail page for `item.id` and extracts the prompt text
+ * from the DOM. Used when the API returns an item with promptReady=false.
+ *
+ * Returns the scraped prompt string (may be empty string on failure).
+ */
+export async function scrapePromptFallback(page, item) {
+  try {
+    await page.goto(`https://www.meigen.ai/prompt/${item.id}`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 25000,
+    });
+    await SLEEP(1200);
+
+    return await page.evaluate(() => {
+      let prompt = '';
+
+      // Priority selectors — most reliable first
+      const SELECTORS = [
+        '[class*="prompt-text"]', '[class*="promptText"]', '[class*="prompt_text"]',
+        '[data-testid="prompt"]', 'pre', 'code.prompt',
+        'article .content', '.prose', '[class*="description"]',
+        'textarea', '[contenteditable]',
+      ];
+      for (const sel of SELECTORS) {
+        for (const el of document.querySelectorAll(sel)) {
+          const t = el.textContent?.trim() || '';
+          if (t.length > 80 && t.length > prompt.length && t.length < 30000) prompt = t;
+        }
+      }
+
+      // Fallback: largest paragraph-like text block without UI noise
+      if (prompt.length < 80) {
+        const blocks = [...document.querySelectorAll('div, p, section')]
+          .filter(el => el.children.length <= 3)
+          .map(el => el.textContent?.trim() || '')
+          .filter(t =>
+            t.length > 100 && t.length < 30000 &&
+            !t.includes('Sign in') && !t.includes('Privacy Policy') && !t.includes('©')
+          )
+          .sort((a, b) => b.length - a.length);
+        if (blocks.length) prompt = blocks[0];
+      }
+
+      return prompt;
+    });
+  } catch (e) {
+    return ''; // non-fatal — caller will skip this item's prompt but still upload image
+  }
+}
+
+// ─── Per-sort loop ────────────────────────────────────────────────────────────
+
+/**
+ * Runs a single sort-order scrape loop.
+ *
+ * @param {import('playwright').Browser} browser
+ * @param {string} sort        - 'newest' | 'featured' | 'popular'
+ * @param {Set<string>} seen   - mutable set of already-known source_ids
+ * @param {Function} nextId    - sequencer that returns the next DB id
+ * @param {object} r2          - S3Client pointed at R2
+ * @param {object} args        - parsed CLI args
+ * @param {string} R2_BUCKET
+ * @param {string} R2_PUBLIC_URL
+ *
+ * @returns {{ newRows: object[], uploaded: number, fallbackUsed: number, errors: string[] }}
+ */
+export async function runSort(browser, sort, seen, nextId, r2, args, R2_BUCKET, R2_PUBLIC_URL) {
+  console.log(`\n📡 Sort="${sort}" — starting…`);
+  const newRows = [];
+  const errors = [];
+  let uploaded = 0;
+  let fallbackUsed = 0;
+  let offset = 0;
+  let emptyPages = 0;
+  const LIMIT = args.limit ?? Infinity;
+  const unmappedModels = new Set();
+
+  /**
+   * Creates a fresh browser context, loads the homepage (to get a valid Cloudflare
+   * clearance cookie), then calls the paginated API from inside that page session.
+   * A new context is used for every page fetch — this is the proven pattern for
+   * bypassing Cloudflare's session-level bot detection.
+   */
+  const fetchPageFresh = async ({ sort, offset }) => {
+    const ctx = await browser.newContext({ userAgent: UA });
+    const page = await ctx.newPage();
+    try {
+      await page.goto('https://www.meigen.ai/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      return await fetchPage(page, { sort, offset, limit: 20 });
+    } finally {
+      await ctx.close();
+    }
+  };
+
+  while (newRows.length < LIMIT) {
+    // Fresh-context fetch with exponential back-off on transient errors
+    let body;
+    try {
+      body = await withBackoff(
+        () => fetchPageFresh({ sort, offset }),
+        { maxAttempts: 3, baseMs: 2000 }
+      );
+    } catch (e) {
+      const msg = `offset=${offset} sort=${sort}: ${e.message}`;
+      console.warn(`  ⚠ ${msg}`);
+      errors.push(msg);
+      break;
+    }
+
+    const items = body.images || [];
+    if (items.length === 0) break;
+
+    let newOnPage = 0;
+    for (const item of items) {
+      const sid = String(item.id || '');
+      if (!sid || seen.has(sid)) continue;
+
+      const { ok, needsFallback } = isIngestableOrFallback(item);
+      if (!ok) continue;
+
+      // ── Fallback: scrape prompt from detail page via fresh context ──
+      if (needsFallback) {
+        process.stdout.write(`  [fallback] ${sid.slice(0, 20)}… `);
+        const fbCtx = await browser.newContext({ userAgent: UA });
+        const fbPage = await fbCtx.newPage();
+        try {
+          const scrapedPrompt = await scrapePromptFallback(fbPage, item);
+          if (scrapedPrompt.length > 0) {
+            item.prompt = scrapedPrompt;
+            item.promptReady = true;
+            fallbackUsed++;
+            console.log(`✓ ${scrapedPrompt.length}ch`);
+          } else {
+            console.log(`⚠ no prompt found — skipping`);
+            continue; // can't ingest without prompt
+          }
+        } finally {
+          await fbCtx.close();
+        }
+      }
+
+      seen.add(sid);
+      newOnPage++;
+      const id = nextId();
+      const { row, unmapped } = mapItemToRow(item, { id, r2PublicUrl: R2_PUBLIC_URL });
+      if (unmapped) unmappedModels.add(item.model || '(empty)');
+
+      // ── Upload image to R2 ──
+      if (!args.dryRun) {
+        const key = `${sid}.jpg`;
+        try {
+          if (!(await objectExists(r2, { bucket: R2_BUCKET, key }))) {
+            const imgRes = await fetch(item.image);
+            if (imgRes.ok) {
+              const buf = Buffer.from(await imgRes.arrayBuffer());
+              await uploadImageToR2(r2, { bucket: R2_BUCKET, sourceId: sid, buffer: buf });
+              uploaded++;
+            } else {
+              console.warn(`  image ${sid}: HTTP ${imgRes.status}`);
+            }
+          }
+        } catch (e) {
+          console.warn(`  image ${sid}: ${e.message}`);
+        }
+      }
+
+      newRows.push(row);
+      if (newRows.length >= LIMIT) break;
+    }
+
+    // Stop condition: if all items on this page were already seen
+    if (newOnPage === 0) {
+      emptyPages++;
+      if (sort === 'newest' && emptyPages >= 1) {
+        // For 'newest', any fully-seen page means we've caught up
+        console.log(`\n  ✅ All items on page seen — caught up (newest mode)`);
+        break;
+      }
+      if (emptyPages >= EMPTY_PAGES_BEFORE_STOP) {
+        console.log(`\n  ✅ ${EMPTY_PAGES_BEFORE_STOP} consecutive all-seen pages — stopping sort`);
+        break;
+      }
+    } else {
+      emptyPages = 0;
+    }
+
+    if (!body.hasMore) {
+      console.log(`\n  ✅ API reports hasMore=false — end of results`);
+      break;
+    }
+
+    process.stdout.write(
+      `\r  scanned offset=${offset + 20}, new=${newRows.length}, fallback=${fallbackUsed}, uploaded=${uploaded}    `
+    );
+    offset += 20;
+    await SLEEP(SLEEP_MS);
+  }
+
+  if (unmappedModels.size) {
+    console.log(`\n  unmapped models → ChatGPT fallback: ${[...unmappedModels].join(', ')}`);
+  }
+  console.log(`\n  Sort="${sort}" done — ${newRows.length} new rows, ${fallbackUsed} fallbacks, ${uploaded} uploaded`);
+  return { newRows, uploaded, fallbackUsed, errors };
+}
+
+// ─── Audit logger ─────────────────────────────────────────────────────────────
+
+/**
+ * Writes a JSON entry to scripts/sync-log.json and (non-fatally) upserts
+ * a row into the Supabase `sync_runs` table if it exists.
+ */
+export async function writeSyncLog(supabase, rootDir, entry) {
+  const logPath = join(rootDir, 'scripts', 'sync-log.json');
+  const line = JSON.stringify({ ...entry, ts: new Date().toISOString() }) + '\n';
+  try {
+    appendFileSync(logPath, line);
+  } catch (e) {
+    console.warn(`  ⚠ Could not write sync-log.json: ${e.message}`);
+  }
+
+  // Non-fatal: sync_runs table may not exist
+  try {
+    await supabase.from('sync_runs').insert({
+      started_at:  entry.startedAt,
+      sort:        entry.sort,
+      scanned:     entry.scanned,
+      inserted:    entry.inserted,
+      skipped:     entry.skipped,
+      fallback:    entry.fallback,
+      uploaded:    entry.uploaded,
+      errors:      entry.errors ?? [],
+      dry_run:     entry.dryRun ?? false,
+    });
+  } catch { /* sync_runs table not present — silently ignore */ }
+}
+
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 export async function main() {
   const __dir = dirname(fileURLToPath(import.meta.url));
-  const root = join(__dir, '..');
+  const root  = join(__dir, '..');
   loadEnv(root);
-  const args = parseArgs(process.argv.slice(2));
-  console.log(`\n=== meigen scraper === sort=${args.sort} limit=${args.limit ?? '∞'} dryRun=${args.dryRun}`);
 
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-  const r2 = new S3Client({
+  const args = parseArgs(process.argv.slice(2));
+  const SORTS = args.sort === 'all' ? ['newest', 'featured', 'popular'] : [args.sort];
+  const startedAt = new Date().toISOString();
+
+  console.log(`\n=== meigen → PromptVault sync ===`);
+  console.log(`  sorts=${SORTS.join(',')} | limit=${args.limit ?? '∞'} | dryRun=${args.dryRun}`);
+
+  const supabase   = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  const r2         = new S3Client({
     region: 'auto',
     endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId: process.env.R2_ACCESS_KEY_ID, secretAccessKey: process.env.R2_SECRET_ACCESS_KEY },
+    credentials: {
+      accessKeyId:     process.env.R2_ACCESS_KEY_ID,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
+    },
   });
-  const R2_BUCKET = process.env.R2_BUCKET_NAME;
+  const R2_BUCKET     = process.env.R2_BUCKET_NAME;
   const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL.replace(/\/$/, '');
 
-  console.log('Loading existing source_ids...');
+  console.log('\nLoading existing source_ids from Supabase…');
   const { ids: seen, maxNum } = await loadExistingSourceIds(supabase);
-  console.log(`  ${seen.size} existing source_ids, max id = p${String(maxNum).padStart(4,'0')}`);
+  console.log(`  ${seen.size} existing source_ids, max id = p${String(maxNum).padStart(4, '0')}`);
   const nextId = makeIdSequencer(maxNum);
 
-  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36';
   const browser = await chromium.launch({ headless: true });
 
-  // Cloudflare bot detection tracks API calls within a session; a fresh context
-  // (new clearance token) per page bypasses that pattern reliably.
-  const fetchPageFresh = async (params) => {
-    const ctx = await browser.newContext({ userAgent: UA });
-    const page = await ctx.newPage();
-    await page.goto('https://www.meigen.ai/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    try { return await fetchPage(page, params); }
-    finally { await ctx.close(); }
-  };
-
-  const newRows = [];
-  const unmappedModels = new Set();
-  let scanned = 0, uploaded = 0, offset = 0, stop = false;
-  const LIMIT = args.limit ?? Infinity;
+  let allRows       = [];
+  let totalUploaded = 0;
+  let totalFallback = 0;
+  const allErrors   = [];
 
   try {
-    while (!stop) {
-      let body;
-      try { body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
-      catch (e) { await SLEEP(2000); body = await fetchPageFresh({ sort: args.sort, offset, limit: 20 }); }
-      const items = body.images || [];
-      if (items.length === 0) break;
-
-      let newOnPage = 0;
-      for (const item of items) {
-        scanned++;
-        const sid = String(item.id);
-        if (seen.has(sid) || !isIngestable(item)) continue;
-        seen.add(sid);
-        newOnPage++;
-        const id = nextId();
-        const { row, unmapped } = mapItemToRow(item, { id, r2PublicUrl: R2_PUBLIC_URL });
-        if (unmapped) unmappedModels.add(item.model || '(empty)');
-
-        if (!args.dryRun) {
-          const key = `${sid}.jpg`;
-          if (!(await objectExists(r2, { bucket: R2_BUCKET, key }))) {
-            try {
-              const res = await fetch(item.image);
-              if (res.ok) {
-                const buf = Buffer.from(await res.arrayBuffer());
-                await uploadImageToR2(r2, { bucket: R2_BUCKET, sourceId: sid, buffer: buf });
-                uploaded++;
-              } else { console.warn(`  image ${sid}: HTTP ${res.status}`); }
-            } catch (e) { console.warn(`  image ${sid}: ${e.message}`); }
-          }
-        }
-        newRows.push(row);
-        if (newRows.length >= LIMIT) { stop = true; break; }
-      }
-      const skipped = scanned - newRows.length;
-      process.stdout.write(`\r  scanned ${scanned}, new ${newRows.length}, skipped ${skipped}, uploaded ${uploaded}`);
-      if (!stop && newOnPage === 0 && args.sort === 'newest') { stop = true; } // incremental stop
-      if (!stop && !body.hasMore) stop = true;
-      offset += 20;
-      await SLEEP(400);
+    for (const sort of SORTS) {
+      const { newRows, uploaded, fallbackUsed, errors } = await runSort(
+        browser, sort, seen, nextId, r2, args, R2_BUCKET, R2_PUBLIC_URL
+      );
+      allRows       = allRows.concat(newRows);
+      totalUploaded += uploaded;
+      totalFallback += fallbackUsed;
+      allErrors.push(...errors);
     }
   } finally {
-    await browser.close(); // runs even if page fetch throws after exhausting retries
+    await browser.close();
   }
 
-  if (unmappedModels.size) console.log(`  unmapped models -> ChatGPT fallback: ${[...unmappedModels].join(', ')}`);
-
+  // ── Dry-run exit ──
   if (args.dryRun) {
-    console.log(`\n[DRY RUN] ${newRows.length} new prompts would be inserted. Sample:`);
-    console.log(JSON.stringify(newRows[0] ?? null, null, 2));
+    console.log(`\n[DRY RUN] ${allRows.length} new prompts would be inserted. Sample:`);
+    console.log(JSON.stringify(allRows[0] ?? null, null, 2));
     console.log('\n=== dry run complete (no writes) ===\n');
     return;
   }
 
-  const skipped = scanned - newRows.length;
-  console.log(`\nUpserting ${newRows.length} prompts (scanned ${scanned}, skipped ${skipped})...`);
+  // ── Upsert to Supabase in batches of 100 ──
+  console.log(`\nUpserting ${allRows.length} prompts into Supabase…`);
   let inserted = 0;
-  const BATCH = 100;
-  for (let i = 0; i < newRows.length; i += BATCH) {
-    const batch = newRows.slice(i, i + BATCH);
+  const BATCH  = 100;
+  for (let i = 0; i < allRows.length; i += BATCH) {
+    const batch = allRows.slice(i, i + BATCH);
     const { error } = await supabase.from('prompts').upsert(batch, { onConflict: 'source_id' });
-    // On batch error: images already uploaded to R2 are orphaned but harmless —
-    // the next run re-picks these source_ids (absent from DB), skips the R2 upload
-    // (key exists), and retries the insert. Self-healing across runs.
-    if (error) console.warn(`  batch ${i}: ${error.message}`);
-    else { inserted += batch.length; process.stdout.write(`\r  ${inserted}/${newRows.length}`); }
+    if (error) {
+      console.warn(`  ⚠ batch ${i}: ${error.message}`);
+      allErrors.push(`batch ${i}: ${error.message}`);
+    } else {
+      inserted += batch.length;
+      process.stdout.write(`\r  ${inserted}/${allRows.length}`);
+    }
   }
-  console.log(`\n\n=== done: ${inserted} inserted, ${uploaded} images uploaded ===\n`);
+
+  const skipped = seen.size - inserted; // approximate
+  console.log(`\n\n=== Sync complete ===`);
+  console.log(`  ➕ Inserted:   ${inserted}`);
+  console.log(`  🔄 Fallbacks:  ${totalFallback}`);
+  console.log(`  📤 Uploaded:   ${totalUploaded}`);
+  console.log(`  ⚠  Errors:     ${allErrors.length}`);
+
+  await writeSyncLog(supabase, root, {
+    startedAt,
+    sort:      args.sort,
+    scanned:   allRows.length + skipped,
+    inserted,
+    skipped,
+    fallback:  totalFallback,
+    uploaded:  totalUploaded,
+    errors:    allErrors,
+    dryRun:    false,
+  });
+  console.log(`  📝 Run logged to scripts/sync-log.json\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('scrape-meigen.mjs')) {
+if (
+  import.meta.url === `file://${process.argv[1]}` ||
+  process.argv[1]?.endsWith('scrape-meigen.mjs')
+) {
   main().catch((e) => { console.error(e); process.exit(1); });
 }
