@@ -53,13 +53,13 @@ function defaultSettings(): SiteSettings {
   return {
     siteName: 'PromptVault',
     siteTagline: 'Free AI Prompt Gallery',
-    siteDescription: 'Browse 2000+ free AI prompts for ChatGPT, Midjourney, Nanobanana, and more.',
+    siteDescription: 'Browse 6000+ free AI prompts for ChatGPT, Midjourney, Nanobanana, and more.',
     logoText: 'P',
     logoImageUrl: '',
     faviconUrl: '',
     primaryColor: '#7c3aed',
     metaTitle: 'PromptVault — Free AI Prompt Gallery',
-    metaDescription: 'Browse 2000+ free AI prompts for ChatGPT, Midjourney, Nanobanana, and more.',
+    metaDescription: 'Browse 6000+ free AI prompts for ChatGPT, Midjourney, Nanobanana, and more.',
     footerCopyright: '© 2025 PromptVault. All rights reserved.',
     footerLinks: [
       { label: 'Terms', href: '#terms' },

@@ -6,7 +6,7 @@ import { Sparkles, Shield, Zap, ArrowRight, Eye, EyeOff } from 'lucide-react';
 import { useAdminTheme, tk } from '@/context/AdminThemeContext';
 
 const FEATURES = [
-  { icon: Sparkles, label: '2000+ AI Prompts', sub: 'ChatGPT, Midjourney, Nanobanana & more' },
+  { icon: Sparkles, label: '6000+ AI Prompts', sub: 'ChatGPT, Midjourney, Nanobanana & more' },
   { icon: Shield,   label: 'Secure Panel',     sub: 'HMAC-signed JWT authentication' },
   { icon: Zap,      label: 'Instant CRUD',     sub: 'Create, edit & delete in real-time' },
 ];

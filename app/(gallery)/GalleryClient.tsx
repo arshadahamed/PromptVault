@@ -22,7 +22,7 @@ export function GalleryClient({ prompts }: { prompts: Prompt[] }) {
     <div className="relative">
       <div className="sr-only">
         <h1>Free GPT Image 2 &amp; AI Prompt Gallery</h1>
-        <p>Browse 750+ free AI prompts for ChatGPT, Midjourney, Gemini, Nanobanana, and more.</p>
+        <p>Browse 6000+ free AI prompts for ChatGPT, Midjourney, Gemini, Nanobanana, and more.</p>
         <nav aria-label="Quick links">
           <Link href="/?tab=ChatGPT">ChatGPT Prompts</Link>
           <Link href="/?tab=Midjourney">Midjourney Prompts</Link>
