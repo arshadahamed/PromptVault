@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { supabase } from './supabase';
 
 export interface SiteSettings {
@@ -30,14 +31,22 @@ export interface SiteSettings {
   updatedAt: string;
 }
 
+const _fetchSettings = unstable_cache(
+  async (): Promise<SiteSettings> => {
+    const { data } = await supabase
+      .from('settings')
+      .select('data')
+      .eq('id', 1)
+      .maybeSingle();
+    if (!data || !data.data) return defaultSettings();
+    return { ...defaultSettings(), ...(data.data as Partial<SiteSettings>) };
+  },
+  ['site-settings'],
+  { revalidate: 3600, tags: ['settings'] }
+);
+
 export async function getSettings(): Promise<SiteSettings> {
-  const { data } = await supabase
-    .from('settings')
-    .select('data')
-    .eq('id', 1)
-    .maybeSingle();
-  if (!data || !data.data) return defaultSettings();
-  return { ...defaultSettings(), ...(data.data as Partial<SiteSettings>) };
+  return _fetchSettings();
 }
 
 export async function saveSettings(patch: Partial<SiteSettings>): Promise<SiteSettings> {

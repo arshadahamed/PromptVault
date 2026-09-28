@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { getSettings } from '@/lib/settings';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 3600; // root layout cached for 1 hour
 
 export async function generateMetadata(): Promise<Metadata> {
   const s = await getSettings();

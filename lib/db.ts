@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { unstable_cache } from 'next/cache';
 import { supabase } from './supabase';
 
 export interface DbPrompt {
@@ -80,6 +81,55 @@ function toRow(p: Partial<DbPrompt>): Record<string, unknown> {
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
 
+/**
+ * Paginated prompt fetch — only fetches `limit` rows per page.
+ * Server-side tab/sort filtering keeps payloads tiny (~80 KB vs ~4.7 MB).
+ * Cached for 60 seconds via Next.js unstable_cache.
+ */
+export interface GetPromptsPaginatedOptions {
+  tab?: string;   // 'All' | 'ChatGPT' | 'Midjourney' | etc.
+  sort?: string;  // 'Featured' | 'Newest' | 'Popular'
+  page?: number;  // 1-indexed
+  limit?: number;
+}
+
+export const getPromptsPaginated = unstable_cache(
+  async ({ tab = 'All', sort = 'Featured', page = 1, limit = 50 }: GetPromptsPaginatedOptions = {}): Promise<DbPrompt[]> => {
+    let q = supabase
+      .from('prompts')
+      .select('*')
+      .eq('published', true);
+
+    if (tab && tab !== 'All') q = q.eq('tab', tab);
+
+    if (sort === 'Popular')       q = q.order('likes',      { ascending: false });
+    else if (sort === 'Newest')   q = q.order('created_at', { ascending: false });
+    else /* Featured */           q = q.order('featured',   { ascending: false })
+                                       .order('created_at', { ascending: false });
+
+    const from = (page - 1) * limit;
+    const { data, error } = await q.range(from, from + limit - 1);
+    if (error) throw new Error(error.message);
+    return (data ?? []).map(fromRow);
+  },
+  ['prompts-paginated'],
+  { revalidate: 60, tags: ['prompts'] }
+);
+
+/** Total published prompt count — cached 60 s */
+export const getPromptCount = unstable_cache(
+  async (tab = 'All'): Promise<number> => {
+    let q = supabase.from('prompts').select('id', { count: 'exact', head: true }).eq('published', true);
+    if (tab !== 'All') q = q.eq('tab', tab);
+    const { count, error } = await q;
+    if (error) throw new Error(error.message);
+    return count ?? 0;
+  },
+  ['prompts-count'],
+  { revalidate: 60, tags: ['prompts'] }
+);
+
+/** Admin only — fetches all rows (no cache) */
 export async function getAllPrompts(): Promise<DbPrompt[]> {
   const PAGE = 1000;
   const all: DbPrompt[] = [];

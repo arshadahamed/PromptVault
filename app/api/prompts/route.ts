@@ -1,9 +1,9 @@
+import { NextRequest, NextResponse } from 'next/server';
 import { getPromptsPaginated, getPromptCount } from '@/lib/db';
 import type { DbPrompt } from '@/lib/db';
 import type { Prompt } from '@/lib/types';
-import { GalleryClient } from './GalleryClient';
 
-export const revalidate = 60;
+const LIMIT = 50;
 
 function toPrompt(p: DbPrompt): Prompt {
   const name   = p.authorName || 'Admin';
@@ -31,12 +31,23 @@ function toPrompt(p: DbPrompt): Prompt {
   };
 }
 
-export default async function Home() {
-  // Only fetch first 50 prompts on SSR — the rest load via infinite scroll
+export async function GET(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+  const tab  = searchParams.get('tab')  ?? 'All';
+  const sort = searchParams.get('sort') ?? 'Featured';
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
+
   const [dbPrompts, total] = await Promise.all([
-    getPromptsPaginated({ tab: 'All', sort: 'Featured', page: 1, limit: 50 }),
-    getPromptCount('All'),
+    getPromptsPaginated({ tab, sort, page, limit: LIMIT }),
+    getPromptCount(tab),
   ]);
+
   const prompts = dbPrompts.map(toPrompt);
-  return <GalleryClient initialPrompts={prompts} initialTotal={total} />;
+  const hasMore = page * LIMIT < total;
+
+  return NextResponse.json({ prompts, total, hasMore, page }, {
+    headers: {
+      'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
+    },
+  });
 }
