@@ -8,14 +8,16 @@ interface LazyImageProps {
   style?: React.CSSProperties;
   gradientFrom: string;
   gradientTo: string;
+  eager?: boolean; // skip intersection observer — load immediately (first fold)
 }
 
-export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo }: LazyImageProps) {
+export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo, eager = false }: LazyImageProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(eager);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    if (eager) return; // already visible
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -25,15 +27,15 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
           observer.disconnect();
         }
       },
-      { rootMargin: '200px' }
+      { rootMargin: '300px' } // increased from 200px for faster pre-load
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [eager]);
 
   return (
     <div ref={ref} className="absolute inset-0">
-      {/* Gradient placeholder / shimmer */}
+      {/* Gradient placeholder */}
       <div
         className="absolute inset-0 transition-opacity duration-500"
         style={{
@@ -42,15 +44,12 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
         }}
       >
         {/* Shimmer sweep */}
-        {!loaded && (
-          <div
-            className="absolute inset-0 overflow-hidden"
-            style={{ opacity: visible ? 1 : 0 }}
-          >
+        {!loaded && visible && (
+          <div className="absolute inset-0 overflow-hidden">
             <div
               className="absolute inset-0"
               style={{
-                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.25) 50%, transparent 100%)',
+                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)',
                 animation: 'shimmer 1.6s infinite',
               }}
             />
@@ -58,7 +57,7 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
         )}
       </div>
 
-      {/* Actual image — only rendered once in viewport */}
+      {/* Actual image — only rendered once in/near viewport */}
       {visible && (
         <img
           src={src}
@@ -67,10 +66,11 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
           style={{
             ...style,
             opacity: loaded ? 1 : 0,
-            transition: 'opacity 0.4s ease',
+            transition: 'opacity 0.35s ease',
           }}
-          loading="lazy"
-          decoding="async"
+          loading={eager ? 'eager' : 'lazy'}
+          decoding={eager ? 'sync' : 'async'}
+          fetchPriority={eager ? 'high' : 'auto'}
           onLoad={() => setLoaded(true)}
         />
       )}
