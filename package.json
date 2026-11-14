@@ -9,6 +9,7 @@
     "lint": "eslint",
     "sync": "node scripts/scrape-meigen.mjs --sort=all",
     "sync:dry": "node scripts/scrape-meigen.mjs --sort=all --dry-run",
+    "sync:full": "node scripts/scrape-meigen.mjs --sort=newest --full",
     "sync:test": "node --test scripts/scrape-meigen.test.mjs"
   },
   "dependencies": {

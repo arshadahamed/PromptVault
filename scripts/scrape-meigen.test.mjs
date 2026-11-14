@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   mapModel, GRADIENTS, gradientForId, aspectRatio, makeIdSequencer, maxPromptNum,
-  mapItemToRow, parseArgs,
+  mapItemToRow, parseArgs, isPlausiblePrompt,
   // New helpers
   isIngestableOrFallback, withBackoff,
 } from './scrape-meigen.mjs';
@@ -91,17 +91,30 @@ test('mapItemToRow: missing author/stats fall back', () => {
 });
 
 test('parseArgs (legacy: newest|featured|popular)', () => {
-  assert.deepEqual(parseArgs([]), { dryRun: false, limit: null, sort: 'newest' });
+  assert.deepEqual(parseArgs([]), { dryRun: false, limit: null, sort: 'newest', full: false });
   assert.deepEqual(parseArgs(['--dry-run', '--limit=50', '--sort=featured']),
-    { dryRun: true, limit: 50, sort: 'featured' });
+    { dryRun: true, limit: 50, sort: 'featured', full: false });
   assert.throws(() => parseArgs(['--sort=bogus']), /sort/);
 });
 
 // ─── New tests ────────────────────────────────────────────────────────────────
 
 test('parseArgs: --sort=all and --sort=popular', () => {
-  assert.deepEqual(parseArgs(['--sort=all']), { dryRun: false, limit: null, sort: 'all' });
-  assert.deepEqual(parseArgs(['--sort=popular']), { dryRun: false, limit: null, sort: 'popular' });
+  assert.deepEqual(parseArgs(['--sort=all']), { dryRun: false, limit: null, sort: 'all', full: false });
+  assert.deepEqual(parseArgs(['--sort=popular']), { dryRun: false, limit: null, sort: 'popular', full: false });
+});
+
+test('parseArgs: --full', () => {
+  assert.deepEqual(parseArgs(['--sort=newest', '--full']), { dryRun: false, limit: null, sort: 'newest', full: true });
+});
+
+test('isPlausiblePrompt rejects page chrome / placeholders', () => {
+  assert.equal(isPlausiblePrompt('A cinematic portrait of a woman under neon lights, 50mm, f/1.8'), true);
+  assert.equal(isPlausiblePrompt('HomeSearch⌘KHistorySkills...PromptNo prompt availableGallery'), false);
+  assert.equal(isPlausiblePrompt('{"@context":"https://schema.org"} Drag a card to apply a prompt'), false);
+  assert.equal(isPlausiblePrompt('GPT Image AI generated image by Someone'), false);
+  assert.equal(isPlausiblePrompt(''), false);
+  assert.equal(isPlausiblePrompt(null), false);
 });
 
 test('isIngestableOrFallback: promptReady=true returns ok=true, needsFallback=false', () => {

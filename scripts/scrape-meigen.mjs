@@ -159,11 +159,14 @@ export function mapItemToRow(item, { id, r2PublicUrl }) {
  * --sort=newest|featured|popular|all   (default: newest)
  * --limit=N                            (default: unlimited)
  * --dry-run
+ * --full                               crawl the entire catalogue (no early stop on
+ *                                      already-seen pages) — use to backfill gaps
  */
 export function parseArgs(argv) {
-  const out = { dryRun: false, limit: null, sort: 'newest' };
+  const out = { dryRun: false, limit: null, sort: 'newest', full: false };
   for (const a of argv) {
     if (a === '--dry-run') out.dryRun = true;
+    else if (a === '--full') out.full = true;
     else if (a.startsWith('--limit=')) out.limit = parseInt(a.slice('--limit='.length), 10);
     else if (a.startsWith('--sort=')) out.sort = a.slice('--sort='.length);
   }
@@ -258,7 +261,7 @@ export async function scrapePromptFallback(page, item) {
     });
     await SLEEP(1200);
 
-    return await page.evaluate(() => {
+    const raw = await page.evaluate(() => {
       let prompt = '';
 
       // Priority selectors — most reliable first
@@ -290,9 +293,27 @@ export async function scrapePromptFallback(page, item) {
 
       return prompt;
     });
+    return isPlausiblePrompt(raw) ? raw : '';
   } catch (e) {
     return ''; // non-fatal — caller will skip this item's prompt but still upload image
   }
+}
+
+/**
+ * Rejects text scraped from page chrome (nav, JSON-LD, editor UI) or the
+ * "No prompt available" placeholder, which the DOM fallback can otherwise
+ * pick up as the "largest text block".
+ */
+const UI_MARKERS = [
+  'HomeSearch', 'No prompt available', 'Drag a card to apply a prompt',
+  '"@context"', 'schema.org', 'Related creations', 'Add reference images',
+  'AI generated image by',
+];
+export function isPlausiblePrompt(text) {
+  if (typeof text !== 'string') return false;
+  const t = text.trim();
+  if (t.length < 20) return false;
+  return !UI_MARKERS.some((m) => t.includes(m));
 }
 
 // ─── Per-sort loop ────────────────────────────────────────────────────────────
@@ -319,6 +340,7 @@ export async function runSort(browser, sort, seen, nextId, r2, args, R2_BUCKET, 
   let fallbackUsed = 0;
   let offset = 0;
   let emptyPages = 0;
+  let flushedCount = 0;
   const LIMIT = args.limit ?? Infinity;
   const unmappedModels = new Set();
 
@@ -415,8 +437,14 @@ export async function runSort(browser, sort, seen, nextId, r2, args, R2_BUCKET, 
       if (newRows.length >= LIMIT) break;
     }
 
-    // Stop condition: if all items on this page were already seen
-    if (newOnPage === 0) {
+    // Incremental persist so a crash mid-crawl doesn't lose uploaded work
+    if (typeof args.flush === 'function' && newRows.length > flushedCount) {
+      await args.flush(newRows.slice(flushedCount));
+      flushedCount = newRows.length;
+    }
+
+    // Stop condition: if all items on this page were already seen (skipped in --full mode)
+    if (newOnPage === 0 && !args.full) {
       emptyPages++;
       if (sort === 'newest' && emptyPages >= 1) {
         // For 'newest', any fully-seen page means we've caught up
@@ -493,7 +521,7 @@ export async function main() {
   const startedAt = new Date().toISOString();
 
   console.log(`\n=== meigen → PromptVault sync ===`);
-  console.log(`  sorts=${SORTS.join(',')} | limit=${args.limit ?? '∞'} | dryRun=${args.dryRun}`);
+  console.log(`  sorts=${SORTS.join(',')} | limit=${args.limit ?? '∞'} | dryRun=${args.dryRun} | full=${args.full}`);
 
   const supabase   = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const r2         = new S3Client({
@@ -518,6 +546,23 @@ export async function main() {
   let totalUploaded = 0;
   let totalFallback = 0;
   const allErrors   = [];
+  let inserted      = 0;
+
+  // Upsert rows to Supabase as each page is processed (not in dry-run)
+  const upsertRows = async (rows) => {
+    const BATCH = 100;
+    for (let i = 0; i < rows.length; i += BATCH) {
+      const batch = rows.slice(i, i + BATCH);
+      const { error } = await supabase.from('prompts').upsert(batch, { onConflict: 'source_id' });
+      if (error) {
+        console.warn(`\n  ⚠ upsert: ${error.message}`);
+        allErrors.push(`upsert: ${error.message}`);
+      } else {
+        inserted += batch.length;
+      }
+    }
+  };
+  if (!args.dryRun) args.flush = upsertRows;
 
   try {
     for (const sort of SORTS) {
@@ -541,22 +586,7 @@ export async function main() {
     return;
   }
 
-  // ── Upsert to Supabase in batches of 100 ──
-  console.log(`\nUpserting ${allRows.length} prompts into Supabase…`);
-  let inserted = 0;
-  const BATCH  = 100;
-  for (let i = 0; i < allRows.length; i += BATCH) {
-    const batch = allRows.slice(i, i + BATCH);
-    const { error } = await supabase.from('prompts').upsert(batch, { onConflict: 'source_id' });
-    if (error) {
-      console.warn(`  ⚠ batch ${i}: ${error.message}`);
-      allErrors.push(`batch ${i}: ${error.message}`);
-    } else {
-      inserted += batch.length;
-      process.stdout.write(`\r  ${inserted}/${allRows.length}`);
-    }
-  }
-
+  // Rows were upserted incrementally via args.flush during runSort
   const skipped = seen.size - inserted; // approximate
   console.log(`\n\n=== Sync complete ===`);
   console.log(`  ➕ Inserted:   ${inserted}`);
