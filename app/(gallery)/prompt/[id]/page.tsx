@@ -1,13 +1,12 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { supabase } from '@/lib/supabase';
-import { fromRow } from '@/lib/db';
-import type { DbPrompt } from '@/lib/db';
-import type { Prompt } from '@/lib/types';
+import { getPublishedPromptWithRelated } from '@/lib/db';
+import { toPrompt } from '@/lib/prompts';
+import { isSafeHref } from '@/lib/security';
 import { PromptDetail } from '@/components/prompt/PromptDetail';
 import { getSettings } from '@/lib/settings';
 
-export const dynamic = 'force-dynamic';
+export const revalidate = 60;
 
 export async function generateMetadata({
   params,
@@ -15,51 +14,36 @@ export async function generateMetadata({
   params: Promise<{ id: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const [{ data: row }, s] = await Promise.all([
-    supabase.from('prompts').select('prompt_text,local_img,model,category').eq('id', id).eq('published', true).maybeSingle(),
+  const [{ prompt }, s] = await Promise.all([
+    getPublishedPromptWithRelated(id),
     getSettings(),
   ]);
-  if (!row) return {};
-  const title       = `${(row.prompt_text as string).slice(0, 60).trimEnd()}… — ${s.siteName || 'PromptVault'}`;
-  const description = `${row.model} prompt in ${row.category}: ${(row.prompt_text as string).slice(0, 140)}`;
-  const image       = (row.local_img as string) || undefined;
+
+  if (!prompt) return {};
+
+  const siteName    = s.siteName || 'PromptVault';
+  const snippet     = prompt.promptText.slice(0, 60).trimEnd();
+  const title       = `${snippet}… — ${siteName}`;
+  const description = `${prompt.model} prompt in ${prompt.category}: ${prompt.promptText.slice(0, 140)}`;
+  const image       = isSafeHref(prompt.localImg) ? prompt.localImg : undefined;
   const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL || 'https://prompt-vault-seven-eta.vercel.app';
+
   return {
     title,
     description,
+    alternates: { canonical: `${siteUrl}/prompt/${prompt.id}` },
     openGraph: {
       title,
       description,
-      url: `${siteUrl}/prompt/${id}`,
+      url: `${siteUrl}/prompt/${prompt.id}`,
       images: image ? [{ url: image, alt: title }] : [],
     },
-    twitter: { card: 'summary_large_image', title, description, images: image ? [image] : [] },
-  };
-}
-
-function toPrompt(p: DbPrompt): Prompt {
-  const name   = p.authorName || 'Admin';
-  const handle = p.handle.startsWith('@') ? p.handle : '@' + p.handle;
-  const words  = name.split(/\s+/);
-  const initials = words.map((w) => w[0] || '').join('').toUpperCase().slice(0, 2) || 'U';
-  const colors   = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6'];
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % colors.length;
-  return {
-    id:           p.id,
-    author:       { name, handle, initials, avatarColor: colors[h] },
-    model:        p.model    as any,
-    category:     p.category as any,
-    tab:          p.tab      as any,
-    likes:        p.likes,
-    views:        p.views,
-    promptText:   p.promptText,
-    aspectRatio:  p.aspectRatio,
-    gradientFrom: p.gradientFrom,
-    gradientTo:   p.gradientTo,
-    localImg:     p.localImg,
-    relatedIds:   [],
-    createdAt:    p.createdAt.slice(0, 10),
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      images: image ? [image] : [],
+    },
   };
 }
 
@@ -69,27 +53,12 @@ export default async function PromptPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const { prompt: dbPrompt, related: dbRelated } = await getPublishedPromptWithRelated(id);
 
-  const { data: row } = await supabase
-    .from('prompts')
-    .select('*')
-    .eq('id', id)
-    .eq('published', true)
-    .maybeSingle();
+  if (!dbPrompt) notFound();
 
-  if (!row) notFound();
-
-  const { data: relatedRows } = await supabase
-    .from('prompts')
-    .select('*')
-    .eq('category', row.category)
-    .eq('published', true)
-    .neq('id', id)
-    .order('featured', { ascending: false })
-    .limit(3);
-
-  const prompt  = toPrompt(fromRow(row));
-  const related = (relatedRows ?? []).map((r) => toPrompt(fromRow(r)));
+  const prompt  = toPrompt(dbPrompt);
+  const related = dbRelated.map(toPrompt);
 
   return <PromptDetail prompt={prompt} related={related} />;
 }

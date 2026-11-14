@@ -1,79 +1,82 @@
 'use client';
 import { useState } from 'react';
-import { Tag, ChevronDown, Clock } from 'lucide-react';
+import { Layers, ChevronDown, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useApp } from '@/context/AppContext';
+import type { Tab } from '@/lib/types';
 
-const TAGS = [
-  'All', 'ChatGPT', 'Midjourney', 'Gemini', 'Stable Diffusion',
-  'DALL-E', 'Flux', 'Seedance', 'Nanobanana', 'Adobe Firefly', 'Leonardo AI',
+const MODEL_TABS: { tab: Tab; dot: string }[] = [
+  { tab: 'All',        dot: '#a855f7' },
+  { tab: 'ChatGPT',    dot: '#10b981' },
+  { tab: 'Nanobanana', dot: '#f59e0b' },
+  { tab: 'Midjourney', dot: '#3b82f6' },
+  { tab: 'Flux',       dot: '#06b6d4' },
+  { tab: 'Seedance',   dot: '#ec4899' },
 ];
 
-const TAG_DOTS: Partial<Record<string, string>> = {
-  'ChatGPT':         '#10b981',
-  'Midjourney':      '#3b82f6',
-  'Gemini':          '#ec4899',
-  'Stable Diffusion':'#a855f7',
-  'Flux':            '#06b6d4',
-  'Seedance':        '#f59e0b',
-  'Nanobanana':      '#f97316',
-  'Adobe Firefly':   '#fb7185',
-};
+interface Props {
+  tabCounts?: Record<string, number>;
+  onNavigate?: () => void;
+}
 
-export function Categories({ onTagSelect }: { onTagSelect?: (t: string) => void }) {
-  const [tagsOpen, setTagsOpen] = useState(true);
-  const [activeTag, setActiveTag] = useState('All');
-
-  const selectTag = (t: string) => {
-    setActiveTag(t);
-    onTagSelect?.(t);
-  };
+export function Categories({ tabCounts, onNavigate }: Props) {
+  const [open, setOpen] = useState(true);
+  const { activeTab, activeSort, setGalleryFilter } = useApp();
 
   return (
-    <div className="px-2">
-      <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#3d3d47' }}>
-        Categories
+    <div className="px-2.5">
+      <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">
+        Models &amp; Feeds
       </p>
 
-      {/* Tags collapsible */}
       <button
-        onClick={() => setTagsOpen((v) => !v)}
-        className="flex items-center gap-3 w-full px-3 py-2 rounded-[10px] text-sm font-medium transition-colors cursor-pointer group"
-        style={{ color: '#8b8b99' }}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex items-center gap-3 w-full px-3 py-2 rounded-[10px] text-[13px] font-medium text-[#a1a1aa] hover:text-white transition-colors cursor-pointer group"
       >
-        <Tag size={15} strokeWidth={1.8} className="group-hover:text-white transition-colors" />
-        <span className="group-hover:text-white transition-colors">Tags</span>
+        <Layers size={15} strokeWidth={1.8} className="group-hover:text-white transition-colors" />
+        <span>AI Models</span>
         <ChevronDown
           size={13}
-          className={cn('ml-auto transition-transform duration-200', tagsOpen ? 'rotate-180' : '')}
-          style={{ color: '#3d3d47' }}
+          className={cn('ml-auto text-[#71717a] transition-transform duration-200', open ? 'rotate-180' : '')}
         />
       </button>
 
-      {tagsOpen && (
-        <ul className="ml-7 flex flex-col gap-0.5 mt-0.5 mb-1">
-          {TAGS.map((t) => {
-            const active = activeTag === t;
-            const dot = TAG_DOTS[t];
+      {open && (
+        <ul className="ml-3 pl-3 border-l border-white/[0.06] flex flex-col gap-0.5 mt-1 mb-2">
+          {MODEL_TABS.map(({ tab, dot }) => {
+            const count = tabCounts?.[tab];
+            if (tab !== 'All' && count === 0) return null;
+            const active = activeTab === tab;
             return (
-              <li key={t}>
+              <li key={tab}>
                 <button
-                  onClick={() => selectTag(t)}
-                  className="w-full text-left px-3 py-1.5 rounded-[8px] text-[12px] transition-all cursor-pointer flex items-center gap-2"
-                  style={active ? {
-                    background: 'rgba(124,58,237,0.1)',
-                    color: '#f0f0f2',
-                    fontWeight: 600,
-                  } : {
-                    color: '#5c5c6b',
+                  type="button"
+                  onClick={() => {
+                    setGalleryFilter({ tab });
+                    onNavigate?.();
                   }}
-                >
-                  {dot && (
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0"
-                      style={{ background: active ? dot : '#2d2d34' }}
-                    />
+                  className={cn(
+                    'w-full text-left px-2.5 py-1.5 rounded-[8px] text-[12px] transition-all cursor-pointer flex items-center gap-2.5',
+                    active
+                      ? 'bg-violet-500/15 text-white font-semibold'
+                      : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
                   )}
-                  {t}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 transition-transform"
+                    style={{
+                      background: active ? dot : `${dot}66`,
+                      boxShadow: active ? `0 0 8px ${dot}` : 'none',
+                    }}
+                  />
+                  <span className="truncate flex-1">{tab}</span>
+                  {typeof count === 'number' && (
+                    <span className="text-[10px] tabular-nums text-[#71717a]">
+                      {count.toLocaleString()}
+                    </span>
+                  )}
                 </button>
               </li>
             );
@@ -81,13 +84,21 @@ export function Categories({ onTagSelect }: { onTagSelect?: (t: string) => void 
         </ul>
       )}
 
-      {/* Recent Updates */}
       <button
-        className="flex items-center gap-3 w-full px-3 py-2 rounded-[10px] text-sm font-medium transition-colors mt-0.5 cursor-pointer group"
-        style={{ color: '#8b8b99' }}
+        type="button"
+        onClick={() => {
+          setGalleryFilter({ sort: 'Newest' });
+          onNavigate?.();
+        }}
+        className={cn(
+          'flex items-center gap-3 w-full px-3 py-2 rounded-[10px] text-[13px] font-medium transition-colors mt-0.5 cursor-pointer',
+          activeSort === 'Newest'
+            ? 'bg-cyan-500/10 text-cyan-300 font-semibold'
+            : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
+        )}
       >
-        <Clock size={15} strokeWidth={1.8} className="group-hover:text-white transition-colors" />
-        <span className="group-hover:text-white transition-colors">Recent Updates</span>
+        <Clock size={15} strokeWidth={1.8} />
+        <span>Recent Updates</span>
       </button>
     </div>
   );

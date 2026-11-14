@@ -1,208 +1,555 @@
 'use client';
-import { useRef, useState } from 'react';
-import { Download, Upload, FileJson, FileText, CheckCircle2, AlertCircle, Loader2, Database } from 'lucide-react';
-import { useAdminTheme, tk } from '@/context/AdminThemeContext';
+import { useEffect, useId, useRef, useState } from 'react';
+import {
+  Download, Upload, FileJson, FileText, CheckCircle2, AlertCircle,
+  Eye, X, ShieldCheck,
+} from 'lucide-react';
+import type { AdminDashboardStats } from '@/lib/db';
+import {
+  AdminBadge, AdminButton, AdminCard, AdminFormField, AdminPageHeader,
+  AdminSectionHeader, AdminSelect,
+} from '@/components/admin/ui/Primitives';
+import { ConfirmDialog, Dialog } from '@/components/admin/ui/Dialog';
+import { useToast } from '@/components/admin/ui/ToastProvider';
+
+interface ParsedPromptRow {
+  id?: string;
+  promptText?: string;
+  model?: string;
+  authorName?: string;
+  published?: boolean;
+}
+
+interface ImportPreview {
+  fileName: string;
+  fileSizeKb: number;
+  payload: unknown;
+  totalRows: number;
+  validCount: number;
+  invalidCount: number;
+  models: Record<string, number>;
+  sample: ParsedPromptRow[];
+}
+
+interface ImportResult {
+  added: number;
+  skipped: number;
+  total: number;
+  reasons?: {
+    missingPrompt: number;
+    duplicateId: number;
+  };
+}
+
+const MODELS = [
+  'ChatGPT', 'GPT Image', 'Nanobanana Pro', 'Nanobanana 2', 'Seedance 2.0',
+  'Midjourney', 'DALL-E', 'Flux', 'Stable Diffusion', 'Adobe Firefly', 'Gemini', 'Leonardo AI',
+];
 
 export default function ImportExportPage() {
-  const { resolved } = useAdminTheme();
-  const t = tk(resolved);
-  const dark = resolved === 'dark';
+  const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const statusSelectId = useId();
+  const modelSelectId = useId();
 
-  const [importing, setImporting]   = useState(false);
-  const [importResult, setImportResult] = useState<{ added: number; skipped: number; total: number } | null>(null);
-  const [importError, setImportError]   = useState('');
-  const [preview, setPreview]       = useState<{ count: number; file: File } | null>(null);
+  const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+  const [exportStatus, setExportStatus] = useState<'all' | 'published' | 'draft' | 'featured'>('all');
+  const [exportModel, setExportModel] = useState('');
+  const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
+  const [exportError, setExportError] = useState('');
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    setImportResult(null); setImportError('');
-    const file = e.target.files?.[0];
-    if (!file) { setPreview(null); return; }
+  const [dragActive, setDragActive] = useState(false);
+  const [preview, setPreview] = useState<ImportPreview | null>(null);
+  const [previewModalOpen, setPreviewModalOpen] = useState(false);
+  const [confirmImportOpen, setConfirmImportOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState('');
+
+  useEffect(() => {
+    fetch('/api/admin/stats')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setStats(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  async function processFile(file: File) {
+    setImportResult(null);
+    setImportError('');
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text);
-      const arr = parsed.prompts || (Array.isArray(parsed) ? parsed : []);
-      setPreview({ count: arr.length, file });
+      const parsed: unknown = JSON.parse(text);
+      const arr: ParsedPromptRow[] = Array.isArray(parsed)
+        ? (parsed as ParsedPromptRow[])
+        : parsed && typeof parsed === 'object' && Array.isArray((parsed as { prompts?: unknown }).prompts)
+          ? ((parsed as { prompts: ParsedPromptRow[] }).prompts)
+          : [];
+
+      if (arr.length === 0) {
+        setImportError('No prompt records found in this JSON file.');
+        setPreview(null);
+        return;
+      }
+
+      let validCount = 0;
+      let invalidCount = 0;
+      const models: Record<string, number> = {};
+
+      for (const item of arr) {
+        if (item && typeof item.promptText === 'string' && item.promptText.trim()) {
+          validCount++;
+          const m = typeof item.model === 'string' && item.model.trim() ? item.model.trim() : 'ChatGPT';
+          models[m] = (models[m] || 0) + 1;
+        } else {
+          invalidCount++;
+        }
+      }
+
+      setPreview({
+        fileName: file.name,
+        fileSizeKb: Math.max(1, Math.round(file.size / 1024)),
+        payload: parsed,
+        totalRows: arr.length,
+        validCount,
+        invalidCount,
+        models,
+        sample: arr.slice(0, 8),
+      });
     } catch {
-      setImportError('Invalid JSON file. Please upload a valid export file.');
+      setImportError('Invalid JSON file. Please upload a valid prompt backup export.');
       setPreview(null);
     }
   }
 
+  function clearFile() {
+    setPreview(null);
+    setImportError('');
+    if (fileRef.current) fileRef.current.value = '';
+  }
+
   async function runImport() {
     if (!preview) return;
-    setImporting(true); setImportResult(null); setImportError('');
+    setConfirmImportOpen(false);
+    setImporting(true);
+    setImportResult(null);
+    setImportError('');
+
     try {
-      const text = await preview.file.text();
-      const parsed = JSON.parse(text);
       const res = await fetch('/api/admin/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(parsed),
+        body: JSON.stringify(preview.payload),
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Import failed');
-      setImportResult(data);
-      setPreview(null);
-      if (fileRef.current) fileRef.current.value = '';
-    } catch (err: any) {
-      setImportError(err.message || 'Import failed');
+
+      setImportResult(data as ImportResult);
+      toast({
+        title: `Import complete: ${data.added} added`,
+        description: `${data.skipped} skipped (duplicates or invalid).`,
+        variant: 'success',
+      });
+      clearFile();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Import failed';
+      setImportError(msg);
+      toast({ title: 'Import failed', description: msg, variant: 'error' });
     } finally {
       setImporting(false);
     }
   }
 
-  function exportData(format: 'json' | 'csv') {
-    window.location.href = `/api/admin/export?format=${format}`;
+  async function exportData(format: 'json' | 'csv') {
+    setExportError('');
+    setExporting(format);
+    try {
+      const qs = new URLSearchParams({ format });
+      if (exportStatus !== 'all') qs.set('status', exportStatus);
+      if (exportModel) qs.set('model', exportModel);
+
+      const res = await fetch(`/api/admin/export?${qs.toString()}`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        throw new Error(d.error || 'Export failed');
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const match = /filename="([^"]+)"/.exec(disposition);
+      const filename = match?.[1] || `prompts-export.${format}`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+
+      toast({ title: `${format.toUpperCase()} export downloaded`, variant: 'success' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Export failed';
+      setExportError(msg);
+      toast({ title: 'Export failed', description: msg, variant: 'error' });
+    } finally {
+      setExporting(null);
+    }
   }
 
-  const card = { background: dark ? 'rgba(255,255,255,0.03)' : '#ffffff', border: `1px solid ${t.cardBorder}`, borderRadius: '16px' };
-
   return (
-    <div className="p-6 lg:p-8 max-w-3xl">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>
-          <Database size={18} className="text-white" />
-        </div>
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: t.text }}>Import & Export</h1>
-          <p className="text-[13px]" style={{ color: t.textMuted }}>Back up your prompts or import a dataset</p>
-        </div>
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
+      <AdminPageHeader
+        title="Import & Export"
+        description="Download full or filtered backups, or bulk import prompt datasets via JSON."
+        badge={
+          stats ? (
+            <AdminBadge variant="neutral" className="tabular-nums">
+              {stats.totalPrompts.toLocaleString()} prompts in DB
+            </AdminBadge>
+          ) : null
+        }
+      />
 
-      {/* ── Export ── */}
-      <div className="p-6 mb-6" style={card}>
-        <div className="flex items-center gap-2.5 mb-5">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
-            <Download size={13} style={{ color: '#7c3aed' }} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Export Section */}
+        <AdminCard padding="lg">
+          <AdminSectionHeader
+            icon={Download}
+            title="Export Catalog"
+            description="Generate a JSON backup (all fields) or spreadsheet-safe CSV."
+          />
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+            <AdminFormField label="Visibility Scope" htmlFor={statusSelectId}>
+              <AdminSelect
+                id={statusSelectId}
+                value={exportStatus}
+                onChange={(e) => setExportStatus(e.target.value as typeof exportStatus)}
+              >
+                <option value="all">All Prompts</option>
+                <option value="published">Published Only</option>
+                <option value="draft">Hidden Drafts Only</option>
+                <option value="featured">Featured Only</option>
+              </AdminSelect>
+            </AdminFormField>
+
+            <AdminFormField label="Model Filter" htmlFor={modelSelectId}>
+              <AdminSelect
+                id={modelSelectId}
+                value={exportModel}
+                onChange={(e) => setExportModel(e.target.value)}
+              >
+                <option value="">All Models</option>
+                {MODELS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </AdminSelect>
+            </AdminFormField>
           </div>
-          <span className="text-[14px] font-semibold" style={{ color: t.text }}>Export Data</span>
-        </div>
 
-        <p className="text-[13px] mb-5" style={{ color: t.textMuted }}>
-          Download all prompts for backup or migration. JSON includes all fields; CSV is spreadsheet-friendly.
-        </p>
-
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => exportData('json')}
-            className="flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-semibold text-[13px] cursor-pointer transition-all"
-            style={{ background: t.accentMuted, border: `1px solid ${t.accentBorder}`, color: t.accentText }}>
-            <FileJson size={16} />
-            Export JSON
-          </button>
-          <button onClick={() => exportData('csv')}
-            className="flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-semibold text-[13px] cursor-pointer transition-all"
-            style={{ background: dark ? 'rgba(255,255,255,0.05)' : '#f3f4f6', border: `1px solid ${t.cardBorder}`, color: t.text }}>
-            <FileText size={16} />
-            Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* ── Import ── */}
-      <div className="p-6" style={card}>
-        <div className="flex items-center gap-2.5 mb-5">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
-            <Upload size={13} style={{ color: '#7c3aed' }} />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <AdminButton
+              variant="primary"
+              size="lg"
+              loading={exporting === 'json'}
+              disabled={exporting !== null}
+              onClick={() => void exportData('json')}
+              icon={<FileJson size={16} />}
+              className="w-full"
+            >
+              Export JSON
+            </AdminButton>
+            <AdminButton
+              variant="secondary"
+              size="lg"
+              loading={exporting === 'csv'}
+              disabled={exporting !== null}
+              onClick={() => void exportData('csv')}
+              icon={<FileText size={16} />}
+              className="w-full"
+            >
+              Export CSV
+            </AdminButton>
           </div>
-          <span className="text-[14px] font-semibold" style={{ color: t.text }}>Import Prompts</span>
-        </div>
 
-        <p className="text-[13px] mb-5" style={{ color: t.textMuted }}>
-          Upload a JSON export file to add prompts in bulk. Existing prompts (same ID) are skipped automatically.
-        </p>
-
-        {/* Drop zone */}
-        <div
-          onClick={() => fileRef.current?.click()}
-          className="relative border-2 border-dashed rounded-xl py-10 flex flex-col items-center gap-3 cursor-pointer transition-all"
-          style={{ borderColor: preview ? t.accentBorder : t.cardBorder }}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            const f = e.dataTransfer.files[0];
-            if (f && fileRef.current) {
-              const dt = new DataTransfer(); dt.items.add(f);
-              fileRef.current.files = dt.files;
-              fileRef.current.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-          }}>
-          <input ref={fileRef} type="file" accept=".json" className="hidden" onChange={handleFileChange} />
-          <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-            style={{ background: preview ? t.accentMuted : dark ? 'rgba(255,255,255,0.04)' : '#f3f4f6' }}>
-            <FileJson size={20} style={{ color: preview ? t.accent : t.textMuted }} />
-          </div>
-          {preview ? (
-            <div className="text-center">
-              <p className="text-[13px] font-semibold" style={{ color: t.text }}>{preview.file.name}</p>
-              <p className="text-[12px] mt-1" style={{ color: t.textMuted }}>{preview.count.toLocaleString()} prompts detected</p>
-            </div>
-          ) : (
-            <div className="text-center">
-              <p className="text-[13px] font-medium" style={{ color: t.text }}>Click to select or drag & drop</p>
-              <p className="text-[12px] mt-1" style={{ color: t.textMuted }}>JSON export file only</p>
+          {exportError && (
+            <div
+              role="alert"
+              className="mt-4 flex items-start gap-2.5 px-3.5 py-3 rounded-xl text-[12.5px]"
+              style={{
+                backgroundColor: 'var(--adm-danger-bg)',
+                border: '1px solid var(--adm-danger-border)',
+                color: 'var(--adm-danger-text)',
+              }}
+            >
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>{exportError}</span>
             </div>
           )}
-        </div>
 
-        {/* Preview + import button */}
-        {preview && (
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex-1 px-4 py-3 rounded-xl text-[13px]"
-              style={{ background: t.accentMuted, border: `1px solid ${t.accentBorder}` }}>
-              <span style={{ color: t.accentText }}>Ready to import </span>
-              <span className="font-bold" style={{ color: t.accent }}>{preview.count.toLocaleString()}</span>
-              <span style={{ color: t.accentText }}> prompts</span>
+          <div className="mt-5 pt-4 space-y-1.5 text-[12px]" style={{ borderTop: '1px solid var(--adm-border)', color: 'var(--adm-text-subtle)' }}>
+            <p className="font-semibold uppercase tracking-wider text-[11px]">Format Details</p>
+            <p>• JSON includes complete prompt metadata, gradients, URLs, and IDs for re-importing.</p>
+            <p>• CSV exports key columns with formula-injection protection for Excel &amp; Sheets.</p>
+          </div>
+        </AdminCard>
+
+        {/* Import Section */}
+        <AdminCard padding="lg">
+          <AdminSectionHeader
+            icon={Upload}
+            title="Import Prompts"
+            description="Upload a JSON export file to batch-insert new prompts."
+          />
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void processFile(f);
+            }}
+          />
+
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => fileRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                fileRef.current?.click();
+              }
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragActive(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) void processFile(f);
+            }}
+            className="border-2 border-dashed rounded-xl py-8 px-4 flex flex-col items-center justify-center text-center gap-2.5 cursor-pointer transition-colors"
+            style={{
+              borderColor: dragActive || preview ? 'var(--adm-accent)' : 'var(--adm-border-strong)',
+              backgroundColor: dragActive ? 'var(--adm-accent-soft)' : 'var(--adm-surface-muted)',
+            }}
+          >
+            <div
+              className="w-11 h-11 rounded-xl flex items-center justify-center"
+              style={{
+                backgroundColor: preview ? 'var(--adm-accent-soft)' : 'var(--adm-surface)',
+                border: '1px solid var(--adm-border)',
+                color: preview ? 'var(--adm-accent-text)' : 'var(--adm-text-muted)',
+              }}
+            >
+              <FileJson size={20} />
             </div>
-            <button onClick={runImport} disabled={importing}
-              className="flex items-center gap-2 px-5 py-3 rounded-xl text-[13px] font-semibold text-white cursor-pointer disabled:opacity-60"
-              style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>
-              {importing ? <><Loader2 size={14} className="animate-spin" />Importing…</> : <><Upload size={14} />Import</>}
-            </button>
-          </div>
-        )}
 
-        {/* Result */}
-        {importResult && (
-          <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl"
-            style={{ background: t.success || 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
-            <CheckCircle2 size={16} className="mt-0.5 shrink-0" style={{ color: '#10b981' }} />
-            <div className="text-[13px]" style={{ color: t.successText || '#10b981' }}>
-              <span className="font-semibold">Import complete! </span>
-              {importResult.added.toLocaleString()} added, {importResult.skipped.toLocaleString()} skipped (already exist or invalid).
+            {preview ? (
+              <div>
+                <p className="text-[13.5px] font-semibold" style={{ color: 'var(--adm-text)' }}>
+                  {preview.fileName}
+                </p>
+                <p className="text-[12px] mt-0.5 tabular-nums" style={{ color: 'var(--adm-text-muted)' }}>
+                  {preview.fileSizeKb.toLocaleString()} KB · {preview.totalRows.toLocaleString()} records parsed
+                </p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-[13px] font-semibold" style={{ color: 'var(--adm-text)' }}>
+                  Click to choose or drag &amp; drop a JSON file
+                </p>
+                <p className="text-[12px] mt-0.5" style={{ color: 'var(--adm-text-subtle)' }}>
+                  Supports arrays or &#123; prompts: [...] &#125; export files
+                </p>
+              </div>
+            )}
+          </div>
+
+          {preview && (
+            <div
+              className="mt-4 p-4 rounded-xl flex flex-col gap-3"
+              style={{
+                backgroundColor: 'var(--adm-surface-muted)',
+                border: '1px solid var(--adm-border)',
+              }}
+            >
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <AdminBadge variant="success">{preview.validCount.toLocaleString()} valid</AdminBadge>
+                  {preview.invalidCount > 0 && (
+                    <AdminBadge variant="warning">{preview.invalidCount.toLocaleString()} missing prompt</AdminBadge>
+                  )}
+                  <AdminBadge variant="neutral">{Object.keys(preview.models).length} models</AdminBadge>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <AdminButton
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPreviewModalOpen(true)}
+                    icon={<Eye size={13} />}
+                  >
+                    Preview
+                  </AdminButton>
+                  <AdminButton
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearFile}
+                    aria-label="Clear selected file"
+                    icon={<X size={13} />}
+                  >
+                    Clear
+                  </AdminButton>
+                </div>
+              </div>
+
+              <AdminButton
+                variant="primary"
+                size="md"
+                loading={importing}
+                disabled={preview.validCount === 0}
+                onClick={() => setConfirmImportOpen(true)}
+                icon={<Upload size={14} />}
+                className="w-full"
+              >
+                Import {preview.validCount.toLocaleString()} Valid Prompts
+              </AdminButton>
             </div>
-          </div>
-        )}
+          )}
 
-        {importError && (
-          <div className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl"
-            style={{ background: t.danger, border: `1px solid ${t.dangerBorder}` }}>
-            <AlertCircle size={16} className="mt-0.5 shrink-0" style={{ color: t.dangerText }} />
-            <p className="text-[13px]" style={{ color: t.dangerText }}>{importError}</p>
-          </div>
-        )}
+          {importResult && (
+            <div
+              role="status"
+              className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{
+                backgroundColor: 'var(--adm-success-bg)',
+                border: '1px solid var(--adm-success-border)',
+                color: 'var(--adm-success-text)',
+              }}
+            >
+              <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+              <div className="text-[12.5px]">
+                <p className="font-semibold">
+                  Import complete: {importResult.added.toLocaleString()} added, {importResult.skipped.toLocaleString()} skipped.
+                </p>
+                {importResult.reasons && (
+                  <p className="opacity-85 mt-0.5">
+                    {importResult.reasons.duplicateId.toLocaleString()} duplicate IDs ·{' '}
+                    {importResult.reasons.missingPrompt.toLocaleString()} missing prompt text
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
-        {/* Notes */}
-        <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${t.divider}` }}>
-          <p className="text-[11px] font-semibold uppercase tracking-wider mb-2" style={{ color: t.textSub }}>Notes</p>
-          <ul className="flex flex-col gap-1.5 text-[12px]" style={{ color: t.textMuted }}>
-            {[
-              'Only JSON files exported from this admin panel are supported.',
-              'Prompts with the same ID as existing ones are automatically skipped.',
-              'Images referenced in imported prompts must already be present in /public/images/.',
-            ].map((note, i) => (
-              <li key={i} className="flex items-start gap-2">
-                <span className="mt-1 shrink-0 w-1 h-1 rounded-full" style={{ background: t.textSub }} />
-                {note}
-              </li>
-            ))}
-          </ul>
-        </div>
+          {importError && (
+            <div
+              role="alert"
+              className="mt-4 flex items-start gap-3 px-4 py-3 rounded-xl"
+              style={{
+                backgroundColor: 'var(--adm-danger-bg)',
+                border: '1px solid var(--adm-danger-border)',
+                color: 'var(--adm-danger-text)',
+              }}
+            >
+              <AlertCircle size={16} className="mt-0.5 shrink-0" />
+              <p className="text-[12.5px]">{importError}</p>
+            </div>
+          )}
+
+          <div className="mt-5 pt-4 space-y-1.5 text-[12px]" style={{ borderTop: '1px solid var(--adm-border)', color: 'var(--adm-text-subtle)' }}>
+            <p className="font-semibold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+              <ShieldCheck size={12} /> Import Rules
+            </p>
+            <p>• Existing prompt IDs already in Supabase are skipped automatically to prevent duplicates.</p>
+            <p>• Image URLs (`localImg` / `imageUrl`) are validated for safe HTTP/HTTPS or relative paths (R2 URLs work out of the box).</p>
+            <p>• Records are inserted in batches of 100 and immediately revalidate the public gallery.</p>
+          </div>
+        </AdminCard>
       </div>
+
+      {/* File Preview Modal */}
+      <Dialog
+        open={previewModalOpen}
+        onClose={() => setPreviewModalOpen(false)}
+        title="Import File Preview"
+        description={
+          preview
+            ? `Showing first ${preview.sample.length} of ${preview.totalRows.toLocaleString()} detected rows in ${preview.fileName}.`
+            : undefined
+        }
+        size="lg"
+        footer={
+          <AdminButton variant="primary" size="sm" onClick={() => setPreviewModalOpen(false)}>
+            Close preview
+          </AdminButton>
+        }
+      >
+        {preview && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12.5px] border-collapse">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--adm-border)' }}>
+                  <th className="text-left py-2 pr-3 font-semibold" style={{ color: 'var(--adm-text-muted)' }}>Model</th>
+                  <th className="text-left py-2 pr-3 font-semibold" style={{ color: 'var(--adm-text-muted)' }}>Author</th>
+                  <th className="text-left py-2 pr-3 font-semibold" style={{ color: 'var(--adm-text-muted)' }}>Prompt Snippet</th>
+                  <th className="text-left py-2 font-semibold" style={{ color: 'var(--adm-text-muted)' }}>Valid</th>
+                </tr>
+              </thead>
+              <tbody>
+                {preview.sample.map((row, idx) => {
+                  const hasText = typeof row?.promptText === 'string' && row.promptText.trim().length > 0;
+                  return (
+                    <tr key={idx} style={{ borderBottom: '1px solid var(--adm-border-subtle)' }}>
+                      <td className="py-2.5 pr-3 whitespace-nowrap">
+                        <AdminBadge variant="accent">{row?.model || 'ChatGPT'}</AdminBadge>
+                      </td>
+                      <td className="py-2.5 pr-3 whitespace-nowrap" style={{ color: 'var(--adm-text-secondary)' }}>
+                        {row?.authorName || 'User'}
+                      </td>
+                      <td className="py-2.5 pr-3 max-w-xs truncate" style={{ color: 'var(--adm-text)' }}>
+                        {hasText ? row.promptText : '—'}
+                      </td>
+                      <td className="py-2.5 whitespace-nowrap">
+                        <AdminBadge variant={hasText ? 'success' : 'danger'}>
+                          {hasText ? 'Ready' : 'Skipped'}
+                        </AdminBadge>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Dialog>
+
+      {/* Confirm Import Dialog */}
+      <ConfirmDialog
+        open={confirmImportOpen}
+        onClose={() => setConfirmImportOpen(false)}
+        onConfirm={runImport}
+        loading={importing}
+        variant="primary"
+        title="Run bulk prompt import?"
+        description={
+          preview
+            ? `This will import up to ${preview.validCount.toLocaleString()} valid prompt(s) from "${preview.fileName}". Any records matching existing database IDs will be skipped.`
+            : ''
+        }
+        confirmLabel="Start Import"
+      />
     </div>
   );
 }

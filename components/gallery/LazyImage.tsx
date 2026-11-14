@@ -8,16 +8,25 @@ interface LazyImageProps {
   style?: React.CSSProperties;
   gradientFrom: string;
   gradientTo: string;
-  eager?: boolean; // skip intersection observer — load immediately (first fold)
+  eager?: boolean;
 }
 
-export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo, eager = false }: LazyImageProps) {
+export function LazyImage({
+  src,
+  alt,
+  className,
+  style,
+  gradientFrom,
+  gradientTo,
+  eager = false,
+}: LazyImageProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(eager);
-  const [loaded, setLoaded] = useState(false);
+  const [loaded, setLoaded]   = useState(false);
+  const [failed, setFailed]   = useState(false);
 
   useEffect(() => {
-    if (eager) return; // already visible
+    if (eager) return;
     const el = ref.current;
     if (!el) return;
     const observer = new IntersectionObserver(
@@ -27,7 +36,7 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
           observer.disconnect();
         }
       },
-      { rootMargin: '300px' } // increased from 200px for faster pre-load
+      { rootMargin: '400px' }
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -35,21 +44,21 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
 
   return (
     <div ref={ref} className="absolute inset-0">
-      {/* Gradient placeholder */}
+      {/* Aesthetic gradient placeholder */}
       <div
         className="absolute inset-0 transition-opacity duration-500"
         style={{
           background: `linear-gradient(135deg, ${gradientFrom}, ${gradientTo})`,
-          opacity: loaded ? 0 : 1,
+          opacity: loaded && !failed ? 0 : 1,
         }}
       >
-        {/* Shimmer sweep */}
-        {!loaded && visible && (
+        {!loaded && !failed && visible && (
           <div className="absolute inset-0 overflow-hidden">
             <div
               className="absolute inset-0"
               style={{
-                background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)',
+                background:
+                  'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%)',
                 animation: 'shimmer 1.6s infinite',
               }}
             />
@@ -57,8 +66,7 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
         )}
       </div>
 
-      {/* Actual image — only rendered once in/near viewport */}
-      {visible && (
+      {visible && !failed && (
         <img
           src={src}
           alt={alt}
@@ -66,12 +74,13 @@ export function LazyImage({ src, alt, className, style, gradientFrom, gradientTo
           style={{
             ...style,
             opacity: loaded ? 1 : 0,
-            transition: 'opacity 0.35s ease',
+            transition: 'opacity 0.3s ease, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           }}
           loading={eager ? 'eager' : 'lazy'}
-          decoding={eager ? 'sync' : 'async'}
+          decoding="async"
           fetchPriority={eager ? 'high' : 'auto'}
           onLoad={() => setLoaded(true)}
+          onError={() => setFailed(true)}
         />
       )}
     </div>

@@ -1,60 +1,86 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { use, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Pencil } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+import type { DbPrompt } from '@/lib/db';
 import { PromptForm } from '@/components/admin/PromptForm';
-import { useAdminTheme, tk } from '@/context/AdminThemeContext';
-import { use } from 'react';
+import {
+  AdminBadge, AdminButton, AdminErrorState, AdminPageHeader,
+} from '@/components/admin/ui/Primitives';
 
 export default function EditPromptPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [prompt, setPrompt] = useState<any>(null);
+  const [prompt, setPrompt] = useState<DbPrompt | null>(null);
   const [loading, setLoading] = useState(true);
-  const { resolved } = useAdminTheme();
-  const t = tk(resolved);
+  const [error, setError] = useState('');
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
-    fetch(`/api/admin/prompts/${id}`)
-      .then((r) => r.json())
-      .then((data) => { setPrompt(data); setLoading(false); });
-  }, [id]);
+    const controller = new AbortController();
+    fetch(`/api/admin/prompts/${id}`, { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(res.status === 404 ? 'Prompt not found.' : data.error || 'Failed to load prompt.');
+        }
+        return res.json() as Promise<DbPrompt>;
+      })
+      .then((data) => {
+        setPrompt(data);
+        setError('');
+      })
+      .catch((err) => {
+        if (err?.name !== 'AbortError') {
+          setError(err instanceof Error ? err.message : 'Unable to load prompt.');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [id, reloadTick]);
 
   return (
-    <div className="p-6 lg:p-8">
-      <div className="mb-7">
-        <Link href="/admin/prompts"
-          className="inline-flex items-center gap-1.5 text-[12px] font-medium mb-4 transition-colors"
-          style={{ color: t.textMuted }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = t.accent)}
-          onMouseLeave={(e) => (e.currentTarget.style.color = t.textMuted)}>
-          <ChevronLeft size={14} /> Back to Prompts
-        </Link>
-
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>
-            <Pencil size={16} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-[22px] font-bold" style={{ color: t.text }}>Edit Prompt</h1>
-            <p className="text-[13px] mt-0.5" style={{ color: t.textMuted }}>
-              Update prompt details, image, or metadata
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+      <AdminPageHeader
+        title="Edit Prompt"
+        description="Update prompt content, media, framing, or visibility settings."
+        breadcrumbs={[
+          { label: 'Dashboard', href: '/admin' },
+          { label: 'Prompts', href: '/admin/prompts' },
+          { label: id },
+        ]}
+        badge={
+          prompt ? (
+            <AdminBadge variant={prompt.published === false ? 'danger' : 'success'}>
+              {prompt.published === false ? 'Draft' : 'Published'}
+            </AdminBadge>
+          ) : null
+        }
+        actions={
+          <Link href="/admin/prompts">
+            <AdminButton variant="outline" size="sm" icon={<ArrowLeft size={13} />}>
+              Back to Prompts
+            </AdminButton>
+          </Link>
+        }
+      />
 
       {loading ? (
-        <div className="flex items-center gap-3 text-[14px]" style={{ color: t.textMuted }}>
-          <span className="w-4 h-4 rounded-full border-2 border-t-transparent animate-spin"
-            style={{ borderColor: t.accent, borderTopColor: 'transparent' }} />
-          Loading…
+        <div className="grid grid-cols-1 xl:grid-cols-[390px_1fr] gap-6">
+          <div className="h-96 rounded-2xl admin-skeleton" />
+          <div className="h-96 rounded-2xl admin-skeleton" />
         </div>
-      ) : prompt?.error ? (
-        <div className="px-4 py-3 rounded-xl text-[13px]"
-          style={{ background: t.danger, border: `1px solid ${t.dangerBorder}`, color: t.dangerText }}>
-          Prompt not found.
-        </div>
+      ) : error || !prompt ? (
+        <AdminErrorState
+          message={error || 'Prompt not found.'}
+          onRetry={() => {
+            setLoading(true);
+            setError('');
+            setReloadTick((n) => n + 1);
+          }}
+        />
       ) : (
         <PromptForm mode="edit" initial={prompt} />
       )}

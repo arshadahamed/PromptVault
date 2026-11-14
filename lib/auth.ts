@@ -33,18 +33,22 @@ export async function createToken(): Promise<string> {
 
 export async function verifyToken(token: string): Promise<boolean> {
   try {
+    if (typeof token !== 'string' || !token) return false;
     const lastDot = token.lastIndexOf('.');
     if (lastDot < 0) return false;
     const payload = token.slice(0, lastDot);
     const sig     = token.slice(lastDot + 1);
+    if (!payload.startsWith('admin:') || !/^[0-9a-f]+$/i.test(sig) || sig.length % 2 !== 0) {
+      return false;
+    }
     const expected = await sign(payload);
     // Constant-time comparison — prevents timing attacks on HMAC signature
     const expBuf = Buffer.from(expected, 'hex');
     const sigBuf = Buffer.from(sig,      'hex');
     if (expBuf.length !== sigBuf.length) return false;
     if (!timingSafeEqual(expBuf, sigBuf)) return false;
-    const exp = parseInt(payload.split(':')[1] || '0');
-    return Math.floor(Date.now() / 1000) < exp;
+    const exp = parseInt(payload.split(':')[1] || '0', 10);
+    return Number.isFinite(exp) && Math.floor(Date.now() / 1000) < exp;
   } catch {
     return false;
   }
@@ -52,6 +56,7 @@ export async function verifyToken(token: string): Promise<boolean> {
 
 // Constant-time string equality — prevents timing attacks on username/password
 function safeEq(a: string, b: string): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
   const A = Buffer.from(a);
   const B = Buffer.from(b);
   // Always run timingSafeEqual (even on length mismatch) to avoid length oracle

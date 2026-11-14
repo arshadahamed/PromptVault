@@ -1,113 +1,170 @@
 'use client';
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type ResolvedTheme = 'dark' | 'light';
 
-interface Ctx {
+interface ThemeContextValue {
   mode: ThemeMode;
   resolved: ResolvedTheme;
   setMode: (m: ThemeMode) => void;
 }
 
-const AdminThemeCtx = createContext<Ctx>({ mode: 'dark', resolved: 'dark', setMode: () => {} });
+const STORAGE_KEY = 'admin-theme';
+const THEME_EVENT = 'admin-theme-change';
+
+function subscribeMode(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === null || e.key === STORAGE_KEY) callback();
+  };
+  window.addEventListener('storage', onStorage);
+  window.addEventListener(THEME_EVENT, callback);
+  return () => {
+    window.removeEventListener('storage', onStorage);
+    window.removeEventListener(THEME_EVENT, callback);
+  };
+}
+
+function getModeSnapshot(): ThemeMode {
+  if (typeof window === 'undefined') return 'dark';
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
+  return 'dark';
+}
+
+function getModeServerSnapshot(): ThemeMode {
+  return 'dark';
+}
+
+function subscribeSystemDark(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  mq.addEventListener('change', callback);
+  return () => mq.removeEventListener('change', callback);
+}
+
+function getSystemDarkSnapshot(): boolean {
+  if (typeof window === 'undefined') return true;
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function getSystemDarkServerSnapshot(): boolean {
+  return true;
+}
+
+const AdminThemeCtx = createContext<ThemeContextValue>({
+  mode: 'dark',
+  resolved: 'dark',
+  setMode: () => {},
+});
 
 export function AdminThemeProvider({ children }: { children: React.ReactNode }) {
-  // Read from localStorage synchronously on first render to avoid flash
-  const [mode, setModeState] = useState<ThemeMode>(() => {
-    if (typeof window === 'undefined') return 'dark';
-    return (localStorage.getItem('admin-theme') as ThemeMode) || 'dark';
-  });
-  const [resolved, setResolved] = useState<ResolvedTheme>(() => {
-    if (typeof window === 'undefined') return 'dark';
-    const stored = (localStorage.getItem('admin-theme') as ThemeMode) || 'dark';
-    if (stored === 'system') return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    return stored === 'light' ? 'light' : 'dark';
-  });
+  const mode = useSyncExternalStore(subscribeMode, getModeSnapshot, getModeServerSnapshot);
+  const systemDark = useSyncExternalStore(
+    subscribeSystemDark,
+    getSystemDarkSnapshot,
+    getSystemDarkServerSnapshot
+  );
 
-  // No separate useEffect for initial load — handled in useState initializer above
+  const resolved: ResolvedTheme = mode === 'system' ? (systemDark ? 'dark' : 'light') : mode;
 
-  useEffect(() => {
-    let actual: ResolvedTheme;
-    if (mode === 'system') {
-      actual = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = (e: MediaQueryListEvent) => setResolved(e.matches ? 'dark' : 'light');
-      mq.addEventListener('change', handler);
-      return () => mq.removeEventListener('change', handler);
-    } else {
-      actual = mode;
-    }
-    setResolved(actual);
-  }, [mode]);
-
-  function setMode(m: ThemeMode) {
-    setModeState(m);
-    localStorage.setItem('admin-theme', m);
-  }
+  const setMode = useCallback((next: ThemeMode) => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(STORAGE_KEY, next);
+    window.dispatchEvent(new Event(THEME_EVENT));
+  }, []);
 
   return (
     <AdminThemeCtx.Provider value={{ mode, resolved, setMode }}>
-      {children}
+      <div className="admin-root" data-theme={resolved}>
+        {children}
+      </div>
     </AdminThemeCtx.Provider>
   );
 }
 
 export const useAdminTheme = () => useContext(AdminThemeCtx);
 
-// Theme token helpers
-export const tk = (resolved: ResolvedTheme) => resolved === 'dark' ? DARK : LIGHT;
+export interface ThemeTokens {
+  bg: string;
+  sidebar: string;
+  sidebarBorder: string;
+  card: string;
+  cardBorder: string;
+  cardHover: string;
+  input: string;
+  inputBorder: string;
+  inputFocus: string;
+  text: string;
+  textMuted: string;
+  textSub: string;
+  divider: string;
+  accent: string;
+  accentMuted: string;
+  accentBorder: string;
+  accentText: string;
+  danger: string;
+  dangerBorder: string;
+  dangerText: string;
+  success: string;
+  successText: string;
+  badge: string;
+  badgeText: string;
+}
 
-const DARK = {
-  bg:          '#0d0f1c',
-  sidebar:     'rgba(10,11,22,0.97)',
-  sidebarBorder: 'rgba(124,58,237,0.12)',
-  card:        'rgba(255,255,255,0.03)',
-  cardBorder:  'rgba(255,255,255,0.07)',
-  cardHover:   'rgba(255,255,255,0.06)',
-  input:       'rgba(255,255,255,0.05)',
-  inputBorder: 'rgba(124,58,237,0.2)',
-  inputFocus:  'rgba(124,58,237,0.55)',
-  text:        '#f1f5f9',
-  textMuted:   'rgba(255,255,255,0.4)',
-  textSub:     'rgba(255,255,255,0.25)',
-  divider:     'rgba(255,255,255,0.06)',
-  accent:      '#7c3aed',
-  accentMuted: 'rgba(124,58,237,0.15)',
-  accentBorder:'rgba(124,58,237,0.25)',
-  accentText:  '#c4b5fd',
-  danger:      'rgba(239,68,68,0.1)',
-  dangerBorder:'rgba(239,68,68,0.2)',
-  dangerText:  '#fca5a5',
-  success:     'rgba(16,185,129,0.1)',
+export const tk = (resolved: ResolvedTheme): ThemeTokens => (resolved === 'dark' ? DARK : LIGHT);
+
+const DARK: ThemeTokens = {
+  bg: '#09090b',
+  sidebar: '#0d0d11',
+  sidebarBorder: 'rgba(255,255,255,0.08)',
+  card: '#111116',
+  cardBorder: 'rgba(255,255,255,0.08)',
+  cardHover: 'rgba(255,255,255,0.06)',
+  input: '#14141a',
+  inputBorder: 'rgba(255,255,255,0.12)',
+  inputFocus: '#7c3aed',
+  text: '#f4f4f5',
+  textMuted: '#a1a1aa',
+  textSub: '#71717a',
+  divider: 'rgba(255,255,255,0.07)',
+  accent: '#7c3aed',
+  accentMuted: 'rgba(124,58,237,0.14)',
+  accentBorder: 'rgba(124,58,237,0.35)',
+  accentText: '#c4b5fd',
+  danger: 'rgba(239,68,68,0.12)',
+  dangerBorder: 'rgba(239,68,68,0.3)',
+  dangerText: '#fca5a5',
+  success: 'rgba(16,185,129,0.12)',
   successText: '#6ee7b7',
-  badge:       'rgba(255,255,255,0.06)',
-  badgeText:   'rgba(255,255,255,0.5)',
+  badge: 'rgba(255,255,255,0.06)',
+  badgeText: '#d4d4d8',
 };
 
-const LIGHT = {
-  bg:          '#f4f6fb',
-  sidebar:     '#ffffff',
-  sidebarBorder: '#e5e7eb',
-  card:        '#ffffff',
-  cardBorder:  '#e5e7eb',
-  cardHover:   '#f9fafb',
-  input:       '#f8fafc',
-  inputBorder: '#d1d5db',
-  inputFocus:  '#7c3aed',
-  text:        '#111827',
-  textMuted:   '#6b7280',
-  textSub:     '#9ca3af',
-  divider:     '#e5e7eb',
-  accent:      '#7c3aed',
-  accentMuted: 'rgba(124,58,237,0.08)',
-  accentBorder:'rgba(124,58,237,0.2)',
-  accentText:  '#6d28d9',
-  danger:      '#fef2f2',
-  dangerBorder:'#fecaca',
-  dangerText:  '#dc2626',
-  success:     '#f0fdf4',
-  successText: '#16a34a',
-  badge:       '#f3f4f6',
-  badgeText:   '#6b7280',
+const LIGHT: ThemeTokens = {
+  bg: '#f8fafc',
+  sidebar: '#ffffff',
+  sidebarBorder: '#e2e8f0',
+  card: '#ffffff',
+  cardBorder: '#e2e8f0',
+  cardHover: '#f1f5f9',
+  input: '#ffffff',
+  inputBorder: '#cbd5e1',
+  inputFocus: '#6d28d9',
+  text: '#0f172a',
+  textMuted: '#475569',
+  textSub: '#64748b',
+  divider: '#e2e8f0',
+  accent: '#6d28d9',
+  accentMuted: 'rgba(109,40,217,0.08)',
+  accentBorder: 'rgba(109,40,217,0.24)',
+  accentText: '#5b21b6',
+  danger: '#fef2f2',
+  dangerBorder: '#fecaca',
+  dangerText: '#b91c1c',
+  success: '#ecfdf5',
+  successText: '#047857',
+  badge: '#f1f5f9',
+  badgeText: '#475569',
 };

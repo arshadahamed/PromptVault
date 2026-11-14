@@ -1,210 +1,431 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { Plus, Pencil, Trash2, Check, X, Tag } from 'lucide-react';
-import { useAdminTheme, tk } from '@/context/AdminThemeContext';
+import { useEffect, useId, useMemo, useState } from 'react';
+import Link from 'next/link';
+import {
+  Plus, Pencil, Trash2, Check, X, Tag, Search, ExternalLink, Loader2,
+} from 'lucide-react';
+import type { DbCategory } from '@/lib/db';
+import {
+  AdminBadge, AdminButton, AdminCard, AdminEmptyState, AdminErrorState,
+  AdminFormField, AdminInput, AdminPageHeader, AdminSectionHeader,
+} from '@/components/admin/ui/Primitives';
+import { ConfirmDialog } from '@/components/admin/ui/Dialog';
+import { useToast } from '@/components/admin/ui/ToastProvider';
+
+interface CategoryWithCount extends DbCategory {
+  promptCount?: number;
+}
 
 export default function CategoriesPage() {
-  const { resolved } = useAdminTheme();
-  const t = tk(resolved);
-  const dark = resolved === 'dark';
+  const { toast } = useToast();
+  const newCatInputId = useId();
 
-  const [cats, setCats]       = useState<any[]>([]);
-  const [newName, setNewName] = useState('');
-  const [editId, setEditId]   = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
+  const [cats, setCats] = useState<CategoryWithCount[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [reloadTick, setReloadTick] = useState(0);
 
-  async function load() {
-    const res = await fetch('/api/admin/categories');
-    setCats(await res.json());
-    setLoading(false);
-  }
-  useEffect(() => { load(); }, []);
+  const [filter, setFilter] = useState('');
+  const [newName, setNewName] = useState('');
+  const [addError, setAddError] = useState('');
+  const [adding, setAdding] = useState(false);
 
-  async function add(e: React.FormEvent) {
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editError, setEditError] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<CategoryWithCount | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch('/api/admin/categories?withCounts=1', { signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) throw new Error('Failed to load categories');
+        return res.json() as Promise<CategoryWithCount[]>;
+      })
+      .then((data) => {
+        setCats(Array.isArray(data) ? data : []);
+        setError('');
+      })
+      .catch((err) => {
+        if (err?.name !== 'AbortError') {
+          setError(err instanceof Error ? err.message : 'Unable to load categories');
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [reloadTick]);
+
+  const filteredCats = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    if (!q) return cats;
+    return cats.filter((c) => c.name.toLowerCase().includes(q));
+  }, [cats, filter]);
+
+  async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
-    if (!newName.trim()) return;
-    await fetch('/api/admin/categories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName }),
-    });
-    setNewName('');
-    load();
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      setAddError('Category name is required.');
+      return;
+    }
+    if (trimmed.length > 80) {
+      setAddError('Category name must be 80 characters or fewer.');
+      return;
+    }
+    if (cats.some((c) => c.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      setAddError(`"${trimmed}" already exists.`);
+      return;
+    }
+
+    setAddError('');
+    setAdding(true);
+    try {
+      const res = await fetch('/api/admin/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to add category');
+      setNewName('');
+      toast({ title: `Category "${trimmed}" added`, variant: 'success' });
+      setReloadTick((n) => n + 1);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to add category';
+      setAddError(msg);
+      toast({ title: 'Could not add category', description: msg, variant: 'error' });
+    } finally {
+      setAdding(false);
+    }
   }
 
   async function saveEdit(id: string) {
-    await fetch(`/api/admin/categories/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName }),
-    });
-    setEditId(null);
-    load();
+    const trimmed = editName.trim();
+    if (!trimmed) {
+      setEditError('Name cannot be empty.');
+      return;
+    }
+    if (cats.some((c) => c.id !== id && c.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      setEditError(`"${trimmed}" already exists.`);
+      return;
+    }
+
+    setEditError('');
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/admin/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to update category');
+      setEditId(null);
+      toast({ title: 'Category renamed', variant: 'success' });
+      setReloadTick((n) => n + 1);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to update category';
+      setEditError(msg);
+    } finally {
+      setSavingEdit(false);
+    }
   }
 
-  async function del(id: string, name: string) {
-    if (!confirm(`Delete category "${name}"?`)) return;
-    await fetch(`/api/admin/categories/${id}`, { method: 'DELETE' });
-    load();
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/categories/${deleteTarget.id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Failed to delete category');
+      toast({ title: `Deleted "${deleteTarget.name}"`, variant: 'success' });
+      setDeleteTarget(null);
+      setReloadTick((n) => n + 1);
+    } catch (err) {
+      toast({
+        title: 'Delete failed',
+        description: err instanceof Error ? err.message : 'Please try again.',
+        variant: 'error',
+      });
+    } finally {
+      setDeleting(false);
+    }
   }
-
-  const card = {
-    background: dark ? 'rgba(255,255,255,0.03)' : '#ffffff',
-    border: `1px solid ${t.cardBorder}`,
-    borderRadius: '16px',
-  };
-
-  const inp = {
-    background: t.input,
-    border: `1px solid ${t.inputBorder}`,
-    color: t.text,
-    borderRadius: '10px',
-    fontSize: '13px',
-    outline: 'none',
-    padding: '10px 14px',
-    width: '100%',
-    transition: 'border-color 0.15s',
-  };
 
   return (
-    <div className="p-6 lg:p-8 max-w-4xl">
-      {/* Header */}
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: 'linear-gradient(135deg,#7c3aed,#4f46e5)', boxShadow: '0 4px 16px rgba(124,58,237,0.35)' }}>
-          <Tag size={18} className="text-white" />
-        </div>
-        <div>
-          <h1 className="text-[22px] font-bold" style={{ color: t.text }}>Categories</h1>
-          <p className="text-[13px]" style={{ color: t.textMuted }}>Manage prompt categories used in the gallery</p>
-        </div>
-      </div>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
+      <AdminPageHeader
+        title="Categories"
+        description="Organize prompt categories available in forms and gallery filtering."
+        badge={<AdminBadge variant="neutral">{cats.length} total</AdminBadge>}
+      />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {error && (
+        <div className="mb-6">
+          <AdminErrorState
+            message={error}
+            onRetry={() => {
+              setLoading(true);
+              setError('');
+              setReloadTick((n) => n + 1);
+            }}
+          />
+        </div>
+      )}
 
-        {/* ── Category list ── */}
-        <div style={card} className="overflow-hidden">
-          <div className="px-5 py-4" style={{ borderBottom: `1px solid ${t.divider}` }}>
-            <h2 className="font-semibold text-[14px]" style={{ color: t.text }}>
-              {cats.length} {cats.length === 1 ? 'Category' : 'Categories'}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-6 items-start">
+        {/* Category List Card */}
+        <AdminCard padding="none" className="overflow-hidden">
+          <div
+            className="px-5 py-4 flex items-center justify-between gap-3 flex-wrap"
+            style={{ borderBottom: '1px solid var(--adm-border)' }}
+          >
+            <h2 className="text-[14px] font-semibold" style={{ color: 'var(--adm-text)' }}>
+              All Categories
             </h2>
+            <div className="relative w-full sm:w-56">
+              <Search
+                size={13}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: 'var(--adm-text-subtle)' }}
+              />
+              <input
+                type="text"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                placeholder="Filter categories…"
+                aria-label="Filter categories"
+                className="admin-control w-full pl-8 pr-3 py-1.5 text-[12.5px]"
+              />
+            </div>
           </div>
 
           {loading ? (
-            <div className="p-5 text-[13px]" style={{ color: t.textMuted }}>Loading…</div>
-          ) : cats.length === 0 ? (
-            <div className="p-8 flex flex-col items-center gap-2 text-center">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-1"
-                style={{ background: t.accentMuted, border: `1px solid ${t.accentBorder}` }}>
-                <Tag size={16} style={{ color: t.accent }} />
-              </div>
-              <p className="text-[13px] font-medium" style={{ color: t.textMuted }}>No categories yet</p>
-              <p className="text-[12px]" style={{ color: t.textSub }}>Add one using the form.</p>
+            <div className="p-5 flex flex-col gap-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="h-10 rounded-xl admin-skeleton" />
+              ))}
             </div>
+          ) : filteredCats.length === 0 ? (
+            <AdminEmptyState
+              icon={Tag}
+              title={filter ? 'No matching categories' : 'No categories yet'}
+              description={
+                filter
+                  ? 'Try clearing your search filter.'
+                  : 'Create your first category using the form on the right.'
+              }
+              action={
+                filter ? (
+                  <AdminButton variant="outline" size="sm" onClick={() => setFilter('')}>
+                    Clear filter
+                  </AdminButton>
+                ) : null
+              }
+            />
           ) : (
             <ul>
-              {cats.map((cat, i) => (
-                <li key={cat.id}
-                  className="px-5 py-3 flex items-center gap-3 transition-colors"
-                  style={{
-                    borderBottom: i < cats.length - 1 ? `1px solid ${t.divider}` : 'none',
-                  }}>
-                  {editId === cat.id ? (
-                    <>
-                      <input
-                        autoFocus value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        style={{ ...inp, padding: '6px 10px', flex: 1 }}
-                        onFocus={(e) => (e.target.style.borderColor = t.inputFocus)}
-                        onBlur={(e) => (e.target.style.borderColor = t.inputBorder)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveEdit(cat.id);
-                          if (e.key === 'Escape') setEditId(null);
-                        }}
-                      />
-                      <button onClick={() => saveEdit(cat.id)}
-                        className="p-1.5 rounded-lg cursor-pointer transition-colors"
-                        style={{ color: '#10b981', background: 'rgba(16,185,129,0.1)' }}>
-                        <Check size={13} />
-                      </button>
-                      <button onClick={() => setEditId(null)}
-                        className="p-1.5 rounded-lg cursor-pointer transition-colors"
-                        style={{ color: t.textMuted, background: t.input }}>
-                        <X size={13} />
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: t.accent }} />
-                      <span className="flex-1 text-[13px] font-medium" style={{ color: t.text }}>{cat.name}</span>
-                      <span className="text-[11px] mr-2" style={{ color: t.textSub }}>{cat.createdAt?.slice(0, 10)}</span>
-                      <button
-                        onClick={() => { setEditId(cat.id); setEditName(cat.name); }}
-                        className="p-1.5 rounded-lg cursor-pointer transition-all"
-                        style={{ color: t.textMuted }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = t.accent; e.currentTarget.style.background = t.accentMuted; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = t.textMuted; e.currentTarget.style.background = 'transparent'; }}>
-                        <Pencil size={13} />
-                      </button>
-                      <button
-                        onClick={() => del(cat.id, cat.name)}
-                        className="p-1.5 rounded-lg cursor-pointer transition-all"
-                        style={{ color: t.textMuted }}
-                        onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.color = t.textMuted; e.currentTarget.style.background = 'transparent'; }}>
-                        <Trash2 size={13} />
-                      </button>
-                    </>
-                  )}
-                </li>
-              ))}
+              {filteredCats.map((cat, idx) => {
+                const isEditing = editId === cat.id;
+                const count = cat.promptCount ?? 0;
+
+                return (
+                  <li
+                    key={cat.id}
+                    className="px-5 py-3.5 transition-colors"
+                    style={{
+                      borderBottom: idx < filteredCats.length - 1 ? '1px solid var(--adm-border-subtle)' : 'none',
+                    }}
+                  >
+                    {isEditing ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2">
+                          <input
+                            autoFocus
+                            value={editName}
+                            onChange={(e) => {
+                              setEditName(e.target.value);
+                              setEditError('');
+                            }}
+                            aria-label="Edit category name"
+                            aria-invalid={Boolean(editError)}
+                            className="admin-control flex-1 px-3 py-1.5 text-[13px]"
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                void saveEdit(cat.id);
+                              }
+                              if (e.key === 'Escape') {
+                                setEditId(null);
+                                setEditError('');
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void saveEdit(cat.id)}
+                            disabled={savingEdit}
+                            aria-label="Save category name"
+                            className="p-2 rounded-lg cursor-pointer disabled:opacity-50"
+                            style={{
+                              backgroundColor: 'var(--adm-success-bg)',
+                              color: 'var(--adm-success-text)',
+                            }}
+                          >
+                            {savingEdit ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditId(null);
+                              setEditError('');
+                            }}
+                            disabled={savingEdit}
+                            aria-label="Cancel editing"
+                            className="p-2 rounded-lg cursor-pointer"
+                            style={{
+                              backgroundColor: 'var(--adm-surface-muted)',
+                              color: 'var(--adm-text-muted)',
+                            }}
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                        {editError && (
+                          <p role="alert" className="text-[12px] font-medium" style={{ color: 'var(--adm-danger-text)' }}>
+                            {editError}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: 'var(--adm-accent)' }}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13.5px] font-medium truncate" style={{ color: 'var(--adm-text)' }}>
+                            {cat.name}
+                          </p>
+                          <p className="text-[11px] mt-0.5 tabular-nums" style={{ color: 'var(--adm-text-subtle)' }}>
+                            Created {cat.createdAt?.slice(0, 10) || '—'}
+                          </p>
+                        </div>
+
+                        <Link
+                          href={`/admin/prompts?category=${encodeURIComponent(cat.name)}`}
+                          title="View prompts in this category"
+                          className="inline-flex items-center gap-1 group"
+                        >
+                          <AdminBadge variant={count > 0 ? 'accent' : 'neutral'} className="tabular-nums">
+                            {count.toLocaleString()} prompts
+                            <ExternalLink size={10} className="opacity-60 group-hover:opacity-100" />
+                          </AdminBadge>
+                        </Link>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditId(cat.id);
+                              setEditName(cat.name);
+                              setEditError('');
+                            }}
+                            aria-label={`Rename ${cat.name}`}
+                            title="Rename category"
+                            className="p-1.5 rounded-lg cursor-pointer transition-colors"
+                            style={{ color: 'var(--adm-text-muted)' }}
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(cat)}
+                            aria-label={`Delete ${cat.name}`}
+                            title="Delete category"
+                            className="p-1.5 rounded-lg cursor-pointer transition-colors"
+                            style={{ color: 'var(--adm-danger-text)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
           )}
-        </div>
+        </AdminCard>
 
-        {/* ── Add form ── */}
-        <div style={{ ...card, padding: '24px' }} className="h-fit">
-          <div className="flex items-center gap-2 mb-5">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
-              style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.2)' }}>
-              <Plus size={13} style={{ color: '#7c3aed' }} />
-            </div>
-            <span className="text-[14px] font-semibold" style={{ color: t.text }}>Add New Category</span>
-          </div>
+        {/* Add Category Card */}
+        <AdminCard padding="lg">
+          <AdminSectionHeader
+            icon={Plus}
+            title="Add Category"
+            description="Create a new classification tag for prompt forms."
+          />
 
-          <form onSubmit={add} className="flex flex-col gap-4">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: t.textSub }}>
-                Category Name
-              </span>
-              <input
+          <form onSubmit={handleAdd} noValidate className="flex flex-col gap-4">
+            <AdminFormField
+              label="Category Name"
+              htmlFor={newCatInputId}
+              required
+              error={addError}
+              hint="Must be unique (up to 80 characters)."
+            >
+              <AdminInput
+                id={newCatInputId}
                 value={newName}
-                onChange={(e) => setNewName(e.target.value)}
+                onChange={(e) => {
+                  setNewName(e.target.value);
+                  if (addError) setAddError('');
+                }}
                 placeholder="e.g. Architecture"
-                style={inp}
-                onFocus={(e) => (e.target.style.borderColor = t.inputFocus)}
-                onBlur={(e) => (e.target.style.borderColor = t.inputBorder)}
+                maxLength={80}
+                aria-invalid={Boolean(addError)}
               />
-            </label>
+            </AdminFormField>
 
-            <button type="submit"
-              className="flex items-center justify-center gap-2 py-3 rounded-xl text-[13px] font-semibold text-white cursor-pointer transition-all"
-              style={{
-                background: 'linear-gradient(135deg,#7c3aed,#4f46e5)',
-                boxShadow: '0 4px 16px rgba(124,58,237,0.3)',
-              }}>
-              <Plus size={14} /> Add Category
-            </button>
+            <AdminButton
+              type="submit"
+              variant="primary"
+              size="md"
+              loading={adding}
+              icon={<Plus size={14} />}
+              className="w-full"
+            >
+              Add Category
+            </AdminButton>
           </form>
 
-          <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${t.divider}` }}>
-            <p className="text-[11px]" style={{ color: t.textSub }}>
-              Categories are used to filter and organize prompts in the gallery sidebar.
+          <div className="mt-5 pt-4" style={{ borderTop: '1px solid var(--adm-border)' }}>
+            <p className="text-[12px] leading-relaxed" style={{ color: 'var(--adm-text-subtle)' }}>
+              Categories help organize prompts in the admin form and category filters. Clicking any prompt count badge above opens matching prompts.
             </p>
           </div>
-        </div>
+        </AdminCard>
       </div>
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        loading={deleting}
+        variant="danger"
+        title={`Delete category "${deleteTarget?.name}"?`}
+        description={
+          deleteTarget && (deleteTarget.promptCount ?? 0) > 0
+            ? `${deleteTarget.promptCount?.toLocaleString()} existing prompt(s) currently reference this category. Removing it from the category list will not delete those prompts, but it will no longer appear in category selectors.`
+            : 'This category will be permanently removed from the categories list.'
+        }
+        confirmLabel="Delete category"
+      />
     </div>
   );
 }

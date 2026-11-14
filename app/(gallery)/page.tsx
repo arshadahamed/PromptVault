@@ -1,42 +1,28 @@
-import { getPromptsPaginated, getPromptCount } from '@/lib/db';
-import type { DbPrompt } from '@/lib/db';
-import type { Prompt } from '@/lib/types';
+import { getPromptsPaginated, getTabCounts } from '@/lib/db';
+import { toPrompt } from '@/lib/prompts';
+import { getSettings } from '@/lib/settings';
 import { GalleryClient } from './GalleryClient';
 
 export const revalidate = 60;
 
-function toPrompt(p: DbPrompt): Prompt {
-  const name   = p.authorName || 'Admin';
-  const handle = p.handle.startsWith('@') ? p.handle : '@' + p.handle;
-  const words  = name.split(/\s+/);
-  const initials = words.map((w) => w[0] || '').join('').toUpperCase().slice(0, 2) || 'U';
-  const colors   = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6'];
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % colors.length;
-  return {
-    id:           p.id,
-    author:       { name, handle, initials, avatarColor: colors[h] },
-    model:        p.model    as any,
-    category:     p.category as any,
-    tab:          p.tab      as any,
-    likes:        p.likes,
-    views:        p.views,
-    promptText:   p.promptText,
-    aspectRatio:  p.aspectRatio,
-    gradientFrom: p.gradientFrom,
-    gradientTo:   p.gradientTo,
-    localImg:     p.localImg,
-    relatedIds:   [],
-    createdAt:    p.createdAt.slice(0, 10),
-  };
-}
+const PAGE_SIZE = 48;
 
 export default async function Home() {
-  // Only fetch first 50 prompts on SSR — the rest load via infinite scroll
-  const [dbPrompts, total] = await Promise.all([
-    getPromptsPaginated({ tab: 'All', sort: 'Featured', page: 1, limit: 50 }),
-    getPromptCount('All'),
+  const [dbPrompts, tabCounts, settings] = await Promise.all([
+    getPromptsPaginated({ tab: 'All', sort: 'Featured', page: 1, limit: PAGE_SIZE }),
+    getTabCounts(),
+    getSettings(),
   ]);
+
   const prompts = dbPrompts.map(toPrompt);
-  return <GalleryClient initialPrompts={prompts} initialTotal={total} />;
+  const total = tabCounts.All ?? prompts.length;
+
+  return (
+    <GalleryClient
+      initialPrompts={prompts}
+      initialTotal={total}
+      tabCounts={tabCounts}
+      settings={settings}
+    />
+  );
 }

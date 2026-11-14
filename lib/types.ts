@@ -27,7 +27,15 @@ export type Category =
   | 'Adobe Firefly'
   | 'Leonardo AI';
 
-export type Tab = 'All' | 'ChatGPT' | 'Midjourney' | 'Gemini' | 'Nanobanana' | 'Adobe Firefly';
+export type Tab =
+  | 'All'
+  | 'ChatGPT'
+  | 'Nanobanana'
+  | 'Midjourney'
+  | 'Flux'
+  | 'Seedance'
+  | 'Gemini'
+  | 'Adobe Firefly';
 
 export type Sort = 'Featured' | 'Newest' | 'Popular';
 

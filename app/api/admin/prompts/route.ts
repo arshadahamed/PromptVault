@@ -1,47 +1,94 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAllPrompts, createPrompt, searchPrompts } from '@/lib/db';
+import { revalidatePath, revalidateTag } from 'next/cache';
+import {
+  createPrompt,
+  getAdminPromptsPaginated,
+  type AdminPromptSort,
+  type AdminPromptStatus,
+} from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-auth';
+import { isSafeHref, parsePositiveInt } from '@/lib/security';
+
+const ALLOWED_STATUS = new Set<AdminPromptStatus>(['all', 'published', 'draft', 'featured']);
+const ALLOWED_SORT = new Set<AdminPromptSort>(['newest', 'oldest', 'likes', 'views']);
 
 export async function GET(req: NextRequest) {
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
 
-  const q        = req.nextUrl.searchParams.get('q') || '';
-  const model    = req.nextUrl.searchParams.get('model') || '';
-  const category = req.nextUrl.searchParams.get('category') || '';
-  const page     = parseInt(req.nextUrl.searchParams.get('page')  || '1');
-  const limit    = parseInt(req.nextUrl.searchParams.get('limit') || '20');
+  const sp = req.nextUrl.searchParams;
+  const q        = sp.get('q') || '';
+  const model    = sp.get('model') || '';
+  const category = sp.get('category') || '';
+  const rawStatus = (sp.get('status') || 'all') as AdminPromptStatus;
+  const rawSort   = (sp.get('sort') || 'newest') as AdminPromptSort;
+  const status   = ALLOWED_STATUS.has(rawStatus) ? rawStatus : 'all';
+  const sort     = ALLOWED_SORT.has(rawSort) ? rawSort : 'newest';
+  const page     = parsePositiveInt(sp.get('page'), 1, 10000);
+  const limit    = parsePositiveInt(sp.get('limit'), 20, 100);
 
-  let prompts = q ? await searchPrompts(q) : await getAllPrompts();
-  if (model)    prompts = prompts.filter((p) => p.model    === model);
-  if (category) prompts = prompts.filter((p) => p.category === category);
-
-  prompts = [...prompts].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-  const total = prompts.length;
-  const items = prompts.slice((page - 1) * limit, page * limit);
-  return NextResponse.json({ items, total, page, limit });
+  try {
+    const { items, total } = await getAdminPromptsPaginated({
+      q,
+      model,
+      category,
+      status,
+      sort,
+      page,
+      limit,
+    });
+    return NextResponse.json({ items, total, page, limit });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to load prompts';
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
   const authErr = await requireAdmin(req);
   if (authErr) return authErr;
 
-  const data   = await req.json();
+  let data: Record<string, unknown>;
+  try {
+    data = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const promptText = typeof data.promptText === 'string' ? data.promptText.trim() : '';
+  if (!promptText) {
+    return NextResponse.json({ error: 'Prompt text is required' }, { status: 400 });
+  }
+
+  const rawImageUrl = typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
+  const rawLocalImg = typeof data.localImg === 'string' ? data.localImg.trim() : '';
+
+  if (rawImageUrl && !isSafeHref(rawImageUrl)) {
+    return NextResponse.json({ error: 'Invalid imageUrl' }, { status: 400 });
+  }
+  if (rawLocalImg && !isSafeHref(rawLocalImg)) {
+    return NextResponse.json({ error: 'Invalid localImg' }, { status: 400 });
+  }
+
   const prompt = await createPrompt({
-    promptText:   data.promptText   || '',
-    imageUrl:     data.imageUrl     || '',
-    localImg:     data.localImg     || '',
-    authorName:   data.authorName   || 'User',
-    handle:       data.handle       || '',
-    model:        data.model        || 'GPT Image',
-    category:     data.category     || 'ChatGPT',
-    tab:          data.tab          || 'GPT Image',
-    likes:        data.likes        || 0,
-    views:        data.views        || 0,
-    gradientFrom: data.gradientFrom || '#b4d4f5',
-    gradientTo:   data.gradientTo   || '#f5d4b4',
-    aspectRatio:  data.aspectRatio  || '4/3',
+    promptText,
+    imageUrl:     rawImageUrl,
+    localImg:     rawLocalImg,
+    authorName:   typeof data.authorName   === 'string' && data.authorName.trim() ? data.authorName.trim() : 'Admin',
+    handle:       typeof data.handle       === 'string' ? data.handle.trim()       : '',
+    model:        typeof data.model        === 'string' && data.model.trim() ? data.model.trim() : 'ChatGPT',
+    category:     typeof data.category     === 'string' && data.category.trim() ? data.category.trim() : 'ChatGPT',
+    tab:          typeof data.tab          === 'string' && data.tab.trim() ? data.tab.trim() : 'ChatGPT',
+    likes:        typeof data.likes        === 'number' && Number.isFinite(data.likes) ? Math.max(0, Math.floor(data.likes)) : 0,
+    views:        typeof data.views        === 'number' && Number.isFinite(data.views) ? Math.max(0, Math.floor(data.views)) : 0,
+    gradientFrom: typeof data.gradientFrom === 'string' ? data.gradientFrom : '#b4d4f5',
+    gradientTo:   typeof data.gradientTo   === 'string' ? data.gradientTo   : '#f5d4b4',
+    aspectRatio:  typeof data.aspectRatio  === 'string' ? data.aspectRatio  : '4/3',
+    featured:     typeof data.featured     === 'boolean' ? data.featured    : false,
+    published:    typeof data.published    === 'boolean' ? data.published   : true,
   });
+
+  revalidateTag('prompts', 'max');
+  revalidatePath('/');
   return NextResponse.json(prompt, { status: 201 });
 }

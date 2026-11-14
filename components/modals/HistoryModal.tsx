@@ -1,76 +1,88 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
-import { Clock } from 'lucide-react';
+import { Clock, Trash2 } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useApp } from '@/context/AppContext';
-
-interface PromptItem {
-  id: string;
-  promptText: string;
-  model: string;
-  gradientFrom: string;
-  gradientTo: string;
-  localImg: string;
-}
-
-function mapItem(p: any): PromptItem {
-  return {
-    id: p.id,
-    promptText: p.promptText || p.prompt_text || '',
-    model: p.model || '',
-    gradientFrom: p.gradientFrom || p.gradient_from || '#d4f5b4',
-    gradientTo: p.gradientTo || p.gradient_to || '#f5b4e8',
-    localImg: p.localImg || p.local_img || '',
-  };
-}
+import type { Prompt } from '@/lib/types';
 
 export function HistoryModal({ open }: { open: boolean }) {
-  const { history, closeModal } = useApp();
-  const [items, setItems] = useState<PromptItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { history, clearHistory, closeModal } = useApp();
+  const [items, setItems]         = useState<Prompt[]>([]);
+  const [loadedKey, setLoadedKey] = useState('');
+
+  const reqKey = open && history.length > 0 ? history.join(',') : '';
+  const histSet = useMemo(() => new Set(history), [history]);
 
   useEffect(() => {
-    if (!history.length) { setItems([]); return; }
-    setLoading(true);
-    fetch(`/api/prompts/batch?ids=${history.join(',')}`)
-      .then((r) => r.ok ? r.json() : [])
-      .then((data) => setItems((data as any[]).map(mapItem)))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [history]);
+    if (!reqKey) return;
+    const controller = new AbortController();
+
+    fetch(`/api/prompts/batch?ids=${reqKey}`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        setItems(Array.isArray(data) ? data : []);
+        setLoadedKey(reqKey);
+      })
+      .catch((err) => {
+        if (err?.name !== 'AbortError') setLoadedKey(reqKey);
+      });
+
+    return () => controller.abort();
+  }, [reqKey]);
+
+  const visibleItems = reqKey ? items.filter((p) => histSet.has(p.id)) : [];
+  const loading = Boolean(reqKey) && loadedKey !== reqKey && visibleItems.length === 0;
 
   return (
-    <ModalShell title="History" open={open}>
+    <ModalShell
+      title="Recently Viewed"
+      subtitle={`${history.length} recent`}
+      open={open}
+      headerAction={
+        history.length > 0 ? (
+          <button
+            type="button"
+            onClick={clearHistory}
+            className="text-[11px] font-medium text-zinc-400 hover:text-rose-400 flex items-center gap-1 px-2 py-1 rounded-[8px] hover:bg-white/[0.05] transition-colors cursor-pointer"
+          >
+            <Trash2 size={12} />
+            Clear
+          </button>
+        ) : undefined
+      }
+    >
       {loading ? (
-        <p className="text-[13px] text-[#9ca3af] text-center mt-10">Loading…</p>
-      ) : items.length === 0 ? (
-        <div className="text-center mt-10">
-          <Clock size={28} className="mx-auto mb-2 text-[#d6d3cc]" />
-          <p className="text-[13px] text-[#9ca3af]">
-            No history yet. View prompts to build your history.
+        <p className="text-[13px] text-[#71717a] text-center mt-12">Loading history…</p>
+      ) : visibleItems.length === 0 ? (
+        <div className="text-center mt-14 px-4">
+          <Clock size={28} className="mx-auto mb-3 text-zinc-600" />
+          <p className="text-[13px] text-zinc-400">
+            No history yet. Open any prompt to keep track of it here.
           </p>
         </div>
       ) : (
-        <ul className="flex flex-col gap-1">
-          {items.map((p) => (
+        <ul className="flex flex-col gap-1.5">
+          {visibleItems.map((p) => (
             <li key={p.id}>
               <Link
                 href={`/prompt/${p.id}`}
                 onClick={closeModal}
-                className="flex gap-3 items-start p-2.5 rounded-[10px] hover:bg-[#f7f4ed] transition-colors"
+                className="flex gap-3 items-start p-2.5 rounded-[12px] hover:bg-white/[0.05] border border-transparent hover:border-white/[0.07] transition-all"
               >
                 <div
-                  className="w-10 h-10 rounded-[8px] shrink-0 overflow-hidden"
+                  className="w-11 h-11 rounded-[9px] shrink-0 overflow-hidden ring-1 ring-white/10"
                   style={{ background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})` }}
                 >
-                  {p.localImg && <img src={p.localImg} alt="" className="w-full h-full object-cover" />}
+                  {p.localImg && (
+                    <img src={p.localImg} alt="" className="w-full h-full object-cover" loading="lazy" />
+                  )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[12px] font-medium text-[#1b1b1b] leading-snug line-clamp-2">
-                    {p.promptText.slice(0, 80)}
+                  <p className="text-[12.5px] font-medium text-zinc-100 leading-snug line-clamp-2">
+                    {p.promptText.slice(0, 100)}
                   </p>
-                  <p className="text-[11px] text-[#6b7280] mt-0.5">{p.model}</p>
+                  <p className="text-[11px] text-[#71717a] mt-1">{p.model}</p>
                 </div>
               </Link>
             </li>

@@ -1,5 +1,6 @@
 import { ImageResponse } from 'next/og';
 import { getSettings } from '@/lib/settings';
+import { isSafePublicFetchUrl } from '@/lib/security';
 
 export const size = { width: 32, height: 32 };
 export const dynamic = 'force-dynamic';
@@ -7,10 +8,10 @@ export const dynamic = 'force-dynamic';
 export default async function Icon() {
   const s = await getSettings();
 
-  // If admin uploaded a custom favicon, proxy it so the browser picks it up
-  if (s.faviconUrl) {
+  // If admin uploaded a custom favicon, proxy it safely (SSRF-guarded)
+  if (s.faviconUrl && isSafePublicFetchUrl(s.faviconUrl)) {
     try {
-      const res = await fetch(s.faviconUrl);
+      const res = await fetch(s.faviconUrl, { signal: AbortSignal.timeout(4000) });
       const buf = await res.arrayBuffer();
       const ct  = res.headers.get('Content-Type') || 'image/png';
       return new Response(buf, { headers: { 'Content-Type': ct, 'Cache-Control': 'public, max-age=3600' } });

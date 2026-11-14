@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabasePublic } from '@/lib/supabase';
+import { searchPublishedPrompts } from '@/lib/db';
+import { toPrompt } from '@/lib/prompts';
+import { rateLimit } from '@/lib/rate-limit';
+import { getClientIp, sanitizeSearchQuery } from '@/lib/security';
 
 export async function GET(req: NextRequest) {
-  const q = (req.nextUrl.searchParams.get('q') || '').trim();
-  if (!q) return NextResponse.json([]);
+  const ip = getClientIp(req.headers);
+  const limit = rateLimit(`search:${ip}`, { maxAttempts: 60, windowMs: 60 * 1000 });
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfterSec) } }
+    );
+  }
 
-  const pct = `%${q}%`;
-  const { data, error } = await supabasePublic
-    .from('prompts')
-    .select('id, prompt_text, model, gradient_from, gradient_to, local_img, author_name, handle, category')
-    .eq('published', true)
-    .or(`prompt_text.ilike.${pct},model.ilike.${pct},category.ilike.${pct},author_name.ilike.${pct}`)
-    .limit(10);
+  const q = sanitizeSearchQuery(req.nextUrl.searchParams.get('q') || '');
+  if (!q) return NextResponse.json([], { headers: { 'Cache-Control': 'public, s-maxage=30' } });
 
-  if (error) return NextResponse.json([]);
-  return NextResponse.json(data ?? []);
+  const rows = await searchPublishedPrompts(q, 12);
+  return NextResponse.json(rows.map(toPrompt), {
+    headers: {
+      'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=120',
+    },
+  });
 }

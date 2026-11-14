@@ -1,41 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPromptsPaginated, getPromptCount } from '@/lib/db';
-import type { DbPrompt } from '@/lib/db';
-import type { Prompt } from '@/lib/types';
+import { getPromptsPaginated, getPromptCount, GALLERY_TABS } from '@/lib/db';
+import { toPrompt } from '@/lib/prompts';
+import { parsePositiveInt } from '@/lib/security';
 
-const LIMIT = 50;
-
-function toPrompt(p: DbPrompt): Prompt {
-  const name   = p.authorName || 'Admin';
-  const handle = p.handle.startsWith('@') ? p.handle : '@' + p.handle;
-  const words  = name.split(/\s+/);
-  const initials = words.map((w) => w[0] || '').join('').toUpperCase().slice(0, 2) || 'U';
-  const colors   = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6'];
-  let h = 0;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) % colors.length;
-  return {
-    id:           p.id,
-    author:       { name, handle, initials, avatarColor: colors[h] },
-    model:        p.model    as any,
-    category:     p.category as any,
-    tab:          p.tab      as any,
-    likes:        p.likes,
-    views:        p.views,
-    promptText:   p.promptText,
-    aspectRatio:  p.aspectRatio,
-    gradientFrom: p.gradientFrom,
-    gradientTo:   p.gradientTo,
-    localImg:     p.localImg,
-    relatedIds:   [],
-    createdAt:    p.createdAt.slice(0, 10),
-  };
-}
+const LIMIT = 48;
+const ALLOWED_TABS = new Set<string>(GALLERY_TABS);
+const ALLOWED_SORTS = new Set<string>(['Featured', 'Newest', 'Popular']);
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
-  const tab  = searchParams.get('tab')  ?? 'All';
-  const sort = searchParams.get('sort') ?? 'Featured';
-  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
+  const rawTab  = searchParams.get('tab')  ?? 'All';
+  const rawSort = searchParams.get('sort') ?? 'Featured';
+  const tab  = ALLOWED_TABS.has(rawTab) ? rawTab : 'All';
+  const sort = ALLOWED_SORTS.has(rawSort) ? rawSort : 'Featured';
+  const page = parsePositiveInt(searchParams.get('page'), 1, 1000);
 
   const [dbPrompts, total] = await Promise.all([
     getPromptsPaginated({ tab, sort, page, limit: LIMIT }),
@@ -45,9 +23,12 @@ export async function GET(req: NextRequest) {
   const prompts = dbPrompts.map(toPrompt);
   const hasMore = page * LIMIT < total;
 
-  return NextResponse.json({ prompts, total, hasMore, page }, {
-    headers: {
-      'Cache-Control': 's-maxage=60, stale-while-revalidate=300',
-    },
-  });
+  return NextResponse.json(
+    { prompts, total, hasMore, page, limit: LIMIT },
+    {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+      },
+    }
+  );
 }

@@ -4,10 +4,14 @@ const COOKIE = 'meigen_admin';
 
 async function verifyToken(token: string): Promise<boolean> {
   try {
+    if (!token) return false;
     const lastDot = token.lastIndexOf('.');
     if (lastDot < 0) return false;
     const payload = token.slice(0, lastDot);
     const sig     = token.slice(lastDot + 1);
+    if (!payload.startsWith('admin:') || !/^[0-9a-f]+$/i.test(sig) || sig.length % 2 !== 0) {
+      return false;
+    }
 
     const secret = process.env.JWT_SECRET;
     if (!secret || secret.length < 16) return false;

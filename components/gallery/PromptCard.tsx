@@ -1,156 +1,173 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Heart, Zap } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { Heart, Copy, Check } from 'lucide-react';
 import { type Prompt } from '@/lib/types';
-import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
 import { LazyImage } from './LazyImage';
+import { aspectRatioPaddingBottom } from '@/lib/prompts';
 
-const MODEL_STYLES: Record<string, { bg: string; color: string; glow: string }> = {
-  'ChatGPT':        { bg: 'rgba(16,185,129,0.15)',  color: '#10b981', glow: 'rgba(16,185,129,0.3)'  },
-  'GPT Image':      { bg: 'rgba(16,185,129,0.15)',  color: '#10b981', glow: 'rgba(16,185,129,0.3)'  },
-  'Nanobanana Pro': { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', glow: 'rgba(245,158,11,0.3)'  },
-  'Nanobanana 2':   { bg: 'rgba(239,68,68,0.15)',   color: '#ef4444', glow: 'rgba(239,68,68,0.3)'   },
-  'Seedance 2.0':   { bg: 'rgba(168,85,247,0.15)',  color: '#a855f7', glow: 'rgba(168,85,247,0.3)'  },
-  'Midjourney':     { bg: 'rgba(59,130,246,0.15)',  color: '#3b82f6', glow: 'rgba(59,130,246,0.3)'  },
-  'Flux':           { bg: 'rgba(6,182,212,0.15)',   color: '#06b6d4', glow: 'rgba(6,182,212,0.3)'   },
-  'Gemini':         { bg: 'rgba(236,72,153,0.15)',  color: '#ec4899', glow: 'rgba(236,72,153,0.3)'  },
-  'Adobe Firefly':  { bg: 'rgba(251,113,133,0.15)', color: '#fb7185', glow: 'rgba(251,113,133,0.3)' },
+const MODEL_STYLES: Record<string, { dot: string; color: string; border: string }> = {
+  'ChatGPT':        { dot: '#34d399', color: '#a7f3d0', border: 'rgba(52,211,153,0.38)' },
+  'GPT Image':      { dot: '#34d399', color: '#a7f3d0', border: 'rgba(52,211,153,0.38)' },
+  'Nanobanana Pro': { dot: '#fbbf24', color: '#fde68a', border: 'rgba(251,191,36,0.38)' },
+  'Nanobanana 2':   { dot: '#fbbf24', color: '#fde68a', border: 'rgba(251,191,36,0.38)' },
+  'Seedance 2.0':   { dot: '#f472b6', color: '#fbcfe8', border: 'rgba(244,114,182,0.38)' },
+  'Midjourney':     { dot: '#60a5fa', color: '#bfdbfe', border: 'rgba(96,165,250,0.38)' },
+  'Flux':           { dot: '#22d3ee', color: '#a5f3fc', border: 'rgba(34,211,238,0.38)'  },
+  'Gemini':         { dot: '#c084fc', color: '#e9d5ff', border: 'rgba(192,132,252,0.38)' },
+  'Adobe Firefly':  { dot: '#fb7185', color: '#fecdd3', border: 'rgba(251,113,133,0.38)' },
 };
 
 function ModelBadge({ model }: { model: string }) {
-  // Normalize model key
-  const key = Object.keys(MODEL_STYLES).find(k => model.toLowerCase().includes(k.toLowerCase())) || model;
-  const style = MODEL_STYLES[key] || { bg: 'rgba(139,139,153,0.15)', color: '#8b8b99', glow: 'transparent' };
+  const key = Object.keys(MODEL_STYLES).find((k) =>
+    model.toLowerCase().includes(k.toLowerCase())
+  );
+  const style = key
+    ? MODEL_STYLES[key]
+    : { dot: '#a1a1aa', color: '#e4e4e7', border: 'rgba(255,255,255,0.2)' };
 
   return (
     <span
-      className="text-[10px] font-semibold px-2 py-0.5 rounded-full backdrop-blur-sm"
-      style={{ background: style.bg, color: style.color, border: `1px solid ${style.color}33` }}
+      className="inline-flex items-center gap-1.5 max-w-full whitespace-nowrap truncate text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full backdrop-blur-md shadow-sm"
+      style={{
+        background: 'rgba(9, 9, 11, 0.74)',
+        color: style.color,
+        border: `1px solid ${style.border}`,
+      }}
     >
-      {model}
+      <span
+        className="w-1.5 h-1.5 rounded-full shrink-0"
+        style={{ background: style.dot }}
+      />
+      <span className="truncate">{model}</span>
     </span>
   );
 }
 
 export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: boolean }) {
-  const [hovered, setHovered] = useState(false);
   const { favorites, toggleFavorite } = useApp();
+  const [copied, setCopied] = useState(false);
   const liked = favorites.includes(prompt.id);
+  const paddingBottom = aspectRatioPaddingBottom(prompt.aspectRatio);
 
-  const [w, h] = prompt.aspectRatio.split('/').map(Number);
-  const paddingBottom = `${(h / w) * 100}%`;
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(prompt.promptText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard blocked
+    }
+  };
+
+  const handleFavorite = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavorite(prompt.id);
+  };
 
   return (
-    <div className="break-inside-avoid mb-2.5">
+    <article className="break-inside-avoid mb-3">
       <Link
         href={`/prompt/${prompt.id}`}
-        className="block relative rounded-[14px] overflow-hidden cursor-pointer transition-all duration-300 card-glow"
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        style={{
-          border: hovered
-            ? '1px solid rgba(124,58,237,0.3)'
-            : '1px solid rgba(255,255,255,0.05)',
-          transition: 'border-color 0.3s, box-shadow 0.3s',
-        }}
+        className="group block relative rounded-[16px] overflow-hidden cursor-pointer card-surface"
       >
-        {/* Image area */}
-        <div className="relative w-full" style={{ paddingBottom }}>
+        <div className="relative w-full overflow-hidden" style={{ paddingBottom }}>
           {prompt.localImg ? (
             <LazyImage
               src={prompt.localImg}
-              alt={prompt.promptText.slice(0, 80)}
-              className="absolute inset-0 w-full h-full object-cover"
-              style={{
-                transform: hovered ? 'scale(1.03)' : 'scale(1)',
-                transition: 'transform 0.5s cubic-bezier(0.16,1,0.3,1)',
-              }}
+              alt={prompt.promptText.slice(0, 80) || `${prompt.model} prompt`}
+              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.03]"
               gradientFrom={prompt.gradientFrom}
               gradientTo={prompt.gradientTo}
               eager={eager}
             />
           ) : (
             <div
-              className="absolute inset-0 transition-transform duration-500"
+              className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.03]"
               style={{
                 background: `linear-gradient(135deg, ${prompt.gradientFrom}, ${prompt.gradientTo})`,
-                transform: hovered ? 'scale(1.03)' : 'scale(1)',
               }}
             />
           )}
 
-          {/* Model badge — always visible */}
-          <div className="absolute top-2 left-2 z-10">
+          {/* Top row: Model badge + Quick Copy */}
+          <div className="absolute top-2.5 inset-x-2.5 z-10 flex items-center justify-between gap-2">
             <ModelBadge model={prompt.model} />
+
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label="Copy prompt"
+              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer backdrop-blur-md"
+              style={
+                copied
+                  ? {
+                      opacity: 1,
+                      background: 'rgba(16,185,129,0.9)',
+                      color: '#ffffff',
+                      border: '1px solid rgba(52,211,153,0.6)',
+                    }
+                  : {
+                      background: 'rgba(9,9,11,0.72)',
+                      color: '#f4f4f5',
+                      border: '1px solid rgba(255,255,255,0.16)',
+                    }
+              }
+            >
+              {copied ? <Check size={11} /> : <Copy size={11} />}
+              <span>{copied ? 'Copied' : 'Copy'}</span>
+            </button>
           </div>
 
-          {/* Gradient overlay — always subtle on dark */}
+          {/* Subtle bottom scrim */}
           <div
-            className="absolute inset-0 pointer-events-none"
+            className="absolute inset-0 pointer-events-none opacity-55 group-hover:opacity-100 transition-opacity duration-300"
             style={{
-              background: 'linear-gradient(to top, rgba(0,0,0,0.5) 0%, transparent 50%)',
-              opacity: hovered ? 1 : 0.4,
-              transition: 'opacity 0.3s',
+              background:
+                'linear-gradient(to top, rgba(9,9,11,0.92) 0%, rgba(9,9,11,0.35) 38%, transparent 65%)',
             }}
           />
 
-          {/* Hover controls */}
-          <AnimatePresence>
-            {hovered && (
-              <motion.div
-                className="absolute inset-x-0 bottom-0 p-2.5 z-10 flex items-end justify-between"
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 6 }}
-                transition={{ duration: 0.18, ease: 'easeOut' }}
-              >
-                {/* Like button */}
-                <button
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    toggleFavorite(prompt.id);
-                  }}
-                  className="flex items-center gap-1 text-white text-[11px] px-2.5 py-1 rounded-full transition-all"
-                  style={{
-                    background: liked ? 'rgba(236,72,153,0.4)' : 'rgba(255,255,255,0.12)',
-                    backdropFilter: 'blur(8px)',
-                    border: liked ? '1px solid rgba(236,72,153,0.5)' : '1px solid rgba(255,255,255,0.1)',
-                  }}
-                >
-                  <Heart
-                    size={11}
-                    fill={liked ? '#ec4899' : 'none'}
-                    stroke={liked ? '#ec4899' : 'white'}
-                    strokeWidth={1.5}
-                  />
-                  <span>{prompt.likes + (liked ? 1 : 0)}</span>
-                </button>
+          {/* Bottom hover preview + Favorite action */}
+          <div className="absolute inset-x-0 bottom-0 p-3 z-10 flex flex-col gap-2">
+            <p className="opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-200 text-[11px] leading-snug text-zinc-200 line-clamp-2 pointer-events-none">
+              {prompt.promptText}
+            </p>
 
-                {/* Use prompt button */}
-                <Link
-                  href={`/prompt/${prompt.id}`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full transition-all"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(124,58,237,0.9), rgba(6,182,212,0.8))',
-                    color: '#fff',
-                    boxShadow: '0 0 12px rgba(124,58,237,0.4)',
-                    backdropFilter: 'blur(8px)',
-                  }}
-                >
-                  <Zap size={10} />
-                  Use
-                </Link>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            <div className="flex items-center justify-between gap-2">
+              <span className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 text-[11px] text-zinc-400 truncate">
+                {prompt.author.handle}
+              </span>
+
+              <button
+                type="button"
+                onClick={handleFavorite}
+                aria-label={liked ? 'Remove from favorites' : 'Add to favorites'}
+                className="ml-auto flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full transition-all cursor-pointer backdrop-blur-md"
+                style={{
+                  background: liked ? 'rgba(236,72,153,0.28)' : 'rgba(9,9,11,0.65)',
+                  color: liked ? '#f9a8d4' : '#e4e4e7',
+                  border: liked
+                    ? '1px solid rgba(236,72,153,0.5)'
+                    : '1px solid rgba(255,255,255,0.14)',
+                }}
+              >
+                <Heart
+                  size={11}
+                  fill={liked ? '#ec4899' : 'none'}
+                  stroke={liked ? '#ec4899' : 'currentColor'}
+                  strokeWidth={1.75}
+                />
+                <span className="tabular-nums">{prompt.likes + (liked ? 1 : 0)}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </Link>
-    </div>
+    </article>
   );
 }
