@@ -5,6 +5,7 @@ import {
   Eye, X, ShieldCheck,
 } from 'lucide-react';
 import type { AdminDashboardStats } from '@/lib/db';
+import { ALL_MODELS } from '@/lib/vibe-coding';
 import {
   AdminBadge, AdminButton, AdminCard, AdminFormField, AdminPageHeader,
   AdminSectionHeader, AdminSelect,
@@ -41,10 +42,7 @@ interface ImportResult {
   };
 }
 
-const MODELS = [
-  'ChatGPT', 'GPT Image', 'Nanobanana Pro', 'Nanobanana 2', 'Seedance 2.0',
-  'Midjourney', 'DALL-E', 'Flux', 'Stable Diffusion', 'Adobe Firefly', 'Gemini', 'Leonardo AI',
-];
+const MODELS = [...ALL_MODELS];
 
 export default function ImportExportPage() {
   const { toast } = useToast();
@@ -473,7 +471,8 @@ export default function ImportExportPage() {
               <ShieldCheck size={12} /> Import Rules
             </p>
             <p>• Existing prompt IDs already in Supabase are skipped automatically to prevent duplicates.</p>
-            <p>• Image URLs (`localImg` / `imageUrl`) are validated for safe HTTP/HTTPS or relative paths (R2 URLs work out of the box).</p>
+            <p>• Image URLs (`localImg` / `imageUrl` / `galleryImages`) and `previewUrl` are validated for safe HTTP/HTTPS or relative paths (R2 URLs work out of the box).</p>
+            <p>• Vibe Coding prompts support optional `title`, `codeSnippet`, `codeLanguage`, `stackTags`, `galleryImages`, and `previewUrl` fields.</p>
             <p>• Records are inserted in batches of 100 and immediately revalidate the public gallery.</p>
           </div>
         </AdminCard>

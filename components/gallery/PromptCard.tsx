@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
-import { Heart, Copy, Check } from 'lucide-react';
+import { Heart, Copy, Check, Code2, Images } from 'lucide-react';
 import { type Prompt } from '@/lib/types';
 import { useApp } from '@/context/AppContext';
 import { LazyImage } from './LazyImage';
@@ -10,6 +10,13 @@ import { aspectRatioPaddingBottom } from '@/lib/prompts';
 const MODEL_STYLES: Record<string, { dot: string; color: string; border: string }> = {
   'ChatGPT':        { dot: '#34d399', color: '#a7f3d0', border: 'rgba(52,211,153,0.38)' },
   'GPT Image':      { dot: '#34d399', color: '#a7f3d0', border: 'rgba(52,211,153,0.38)' },
+  'Claude':         { dot: '#fb923c', color: '#fed7aa', border: 'rgba(251,146,60,0.4)' },
+  'Cursor':         { dot: '#22d3ee', color: '#a5f3fc', border: 'rgba(34,211,238,0.4)' },
+  'Lovable':        { dot: '#f472b6', color: '#fbcfe8', border: 'rgba(244,114,182,0.4)' },
+  'Bolt.new':       { dot: '#38bdf8', color: '#bae6fd', border: 'rgba(56,189,248,0.4)' },
+  'v0':             { dot: '#e4e4e7', color: '#ffffff', border: 'rgba(255,255,255,0.32)' },
+  'Replit':         { dot: '#f97316', color: '#fed7aa', border: 'rgba(249,115,22,0.4)' },
+  'Windsurf':       { dot: '#2dd4bf', color: '#99f6e4', border: 'rgba(45,212,191,0.4)' },
   'Nanobanana Pro': { dot: '#fbbf24', color: '#fde68a', border: 'rgba(251,191,36,0.38)' },
   'Nanobanana 2':   { dot: '#fbbf24', color: '#fde68a', border: 'rgba(251,191,36,0.38)' },
   'Seedance 2.0':   { dot: '#f472b6', color: '#fbcfe8', border: 'rgba(244,114,182,0.38)' },
@@ -94,15 +101,43 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
             />
           )}
 
-          {/* Top row: Model badge + Quick Copy */}
-          <div className="absolute top-2.5 inset-x-2.5 z-10 flex items-center justify-between gap-2">
-            <ModelBadge model={prompt.model} />
+          {/* Top row: Model / Vibe Code badge + Quick Copy */}
+          <div className="absolute top-2.5 inset-x-2.5 z-10 flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1 min-w-0">
+              <ModelBadge model={prompt.model} />
+              {prompt.hasCode && (
+                <span
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full backdrop-blur-md shrink-0"
+                  style={{
+                    background: 'rgba(6, 182, 212, 0.2)',
+                    color: '#a5f3fc',
+                    border: '1px solid rgba(34, 211, 238, 0.45)',
+                  }}
+                >
+                  <Code2 size={10} />
+                  <span>{prompt.codeLanguage || 'Code'}</span>
+                </span>
+              )}
+              {prompt.galleryImages && prompt.galleryImages.length > 0 && (
+                <span
+                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full backdrop-blur-md shrink-0"
+                  style={{
+                    background: 'rgba(9, 9, 11, 0.72)',
+                    color: '#e4e4e7',
+                    border: '1px solid rgba(255,255,255,0.16)',
+                  }}
+                >
+                  <Images size={9} />
+                  <span>{prompt.galleryImages.length + (prompt.localImg ? 1 : 0)}</span>
+                </span>
+              )}
+            </div>
 
             <button
               type="button"
               onClick={handleCopy}
               aria-label="Copy prompt"
-              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer backdrop-blur-md"
+              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer backdrop-blur-md shrink-0"
               style={
                 copied
                   ? {
@@ -125,18 +160,33 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
 
           {/* Subtle bottom scrim */}
           <div
-            className="absolute inset-0 pointer-events-none opacity-55 group-hover:opacity-100 transition-opacity duration-300"
+            className={
+              prompt.title
+                ? 'absolute inset-0 pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity duration-300'
+                : 'absolute inset-0 pointer-events-none opacity-55 group-hover:opacity-100 transition-opacity duration-300'
+            }
             style={{
               background:
                 'linear-gradient(to top, rgba(9,9,11,0.92) 0%, rgba(9,9,11,0.35) 38%, transparent 65%)',
             }}
           />
 
-          {/* Bottom hover preview + Favorite action */}
-          <div className="absolute inset-x-0 bottom-0 p-3 z-10 flex flex-col gap-2">
-            <p className="opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-200 text-[11px] leading-snug text-zinc-200 line-clamp-2 pointer-events-none">
-              {prompt.promptText}
-            </p>
+          {/* Bottom title / hover preview + Favorite action */}
+          <div className="absolute inset-x-0 bottom-0 p-3 z-10 flex flex-col gap-1.5">
+            {prompt.title ? (
+              <div className="pointer-events-none">
+                <p className="text-[12.5px] font-semibold text-white truncate drop-shadow-sm">
+                  {prompt.title}
+                </p>
+                <p className="opacity-0 max-h-0 group-hover:opacity-100 group-hover:max-h-10 group-focus-within:opacity-100 group-focus-within:max-h-10 transition-all duration-200 text-[10.5px] leading-snug text-zinc-300 line-clamp-1 overflow-hidden mt-0.5">
+                  {prompt.promptText}
+                </p>
+              </div>
+            ) : (
+              <p className="opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-200 text-[11px] leading-snug text-zinc-200 line-clamp-2 pointer-events-none">
+                {prompt.promptText}
+              </p>
+            )}
 
             <div className="flex items-center justify-between gap-2">
               <span className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 text-[11px] text-zinc-400 truncate">

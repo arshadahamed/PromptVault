@@ -5,8 +5,17 @@ import { useRouter } from 'next/navigation';
 import {
   Upload, Link as LinkIcon, Check, Loader2, Image as ImageIcon, Type,
   Cpu, User, BarChart2, Palette, Trash2, ExternalLink, Sparkles, X, Plus,
+  Code2, Images, ArrowLeft, ArrowRight, FileCode2, Globe, Tag, Layers,
 } from 'lucide-react';
 import type { DbCategory, DbPrompt } from '@/lib/db';
+import {
+  ALL_MODELS,
+  ALL_TABS,
+  CODE_LANGUAGES,
+  STACK_TAG_PRESETS,
+  VIBE_CODING_MODELS,
+  detectLanguageFromFilename,
+} from '@/lib/vibe-coding';
 import {
   AdminBadge, AdminButton, AdminCard, AdminFormField, AdminInput,
   AdminSectionHeader, AdminSelect, AdminSwitch, AdminTextarea,
@@ -14,18 +23,11 @@ import {
 import { ConfirmDialog } from './ui/Dialog';
 import { useToast } from './ui/ToastProvider';
 
-const MODELS = [
-  'ChatGPT', 'GPT Image', 'Nanobanana Pro', 'Nanobanana 2', 'Seedance 2.0',
-  'Midjourney', 'DALL-E', 'Flux', 'Stable Diffusion', 'Adobe Firefly', 'Leonardo AI', 'Gemini',
-];
-
-const TABS = [
-  'ChatGPT', 'Nanobanana', 'Seedance', 'Midjourney', 'Flux', 'Gemini', 'Adobe Firefly',
-  'DALL-E', 'Stable Diffusion', 'Leonardo AI',
-];
+const MODELS = [...ALL_MODELS];
+const TABS = [...ALL_TABS];
 
 const DEFAULT_CATEGORIES = [
-  'ChatGPT', 'Midjourney', 'Nanobanana', 'Seedance', 'DALL-E',
+  'Vibe Coding', 'ChatGPT', 'Midjourney', 'Nanobanana', 'Seedance', 'DALL-E',
   'Flux', 'Stable Diffusion', 'Adobe Firefly', 'Leonardo AI', 'Gemini',
 ];
 
@@ -37,10 +39,17 @@ const GRADIENT_PRESETS: [string, string][] = [
   ['#d4f5b4', '#f5b4e8'],
   ['#f5b4d4', '#b4f5e8'],
   ['#e8d4f5', '#b4e8d4'],
-  ['#1e1b4b', '#6d28d9'],
+  ['#0f172a', '#06b6d4'],
 ];
 
 const MODEL_TO_TAB: Record<string, string> = {
+  Claude: 'Vibe Coding',
+  Cursor: 'Vibe Coding',
+  Lovable: 'Vibe Coding',
+  'Bolt.new': 'Vibe Coding',
+  v0: 'Vibe Coding',
+  Replit: 'Vibe Coding',
+  Windsurf: 'Vibe Coding',
   'Seedance 2.0': 'Seedance',
   Midjourney: 'Midjourney',
   'DALL-E': 'DALL-E',
@@ -55,10 +64,18 @@ const MODEL_TO_TAB: Record<string, string> = {
   ChatGPT: 'ChatGPT',
 };
 
+const VIBE_MODEL_SET = new Set<string>(VIBE_CODING_MODELS);
+
 interface PromptFormState {
+  title: string;
   promptText: string;
   imageUrl: string;
   localImg: string;
+  galleryImages: string[];
+  codeSnippet: string;
+  codeLanguage: string;
+  stackTags: string[];
+  previewUrl: string;
   authorName: string;
   handle: string;
   model: string;
@@ -75,9 +92,15 @@ interface PromptFormState {
 
 function makeInitialState(initial?: DbPrompt): PromptFormState {
   return {
+    title: initial?.title || '',
     promptText: initial?.promptText || '',
     imageUrl: initial?.imageUrl || '',
     localImg: initial?.localImg || '',
+    galleryImages: Array.isArray(initial?.galleryImages) ? initial.galleryImages : [],
+    codeSnippet: initial?.codeSnippet || '',
+    codeLanguage: initial?.codeLanguage || '',
+    stackTags: Array.isArray(initial?.stackTags) ? initial.stackTags : [],
+    previewUrl: initial?.previewUrl || '',
     authorName: initial?.authorName || '',
     handle: initial?.handle || '',
     model: initial?.model || 'ChatGPT',
@@ -91,6 +114,18 @@ function makeInitialState(initial?: DbPrompt): PromptFormState {
     published: initial?.published ?? true,
     featured: initial?.featured ?? false,
   };
+}
+
+function hasVibeData(state: PromptFormState): boolean {
+  return (
+    state.tab === 'Vibe Coding' ||
+    state.category === 'Vibe Coding' ||
+    Boolean(state.title.trim()) ||
+    Boolean(state.codeSnippet.trim()) ||
+    Boolean(state.previewUrl.trim()) ||
+    state.stackTags.length > 0 ||
+    state.galleryImages.length > 0
+  );
 }
 
 function closestAspectRatio(w: number, h: number): string {
@@ -118,9 +153,17 @@ export function PromptForm({ initial, mode }: Props) {
   const router = useRouter();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+  const galleryFileRef = useRef<HTMLInputElement>(null);
+  const codeFileRef = useRef<HTMLInputElement>(null);
 
+  const titleId = useId();
   const promptTextId = useId();
   const imageUrlId = useId();
+  const previewUrlId = useId();
+  const codeLangId = useId();
+  const codeSnippetId = useId();
+  const customTagId = useId();
+  const galleryUrlId = useId();
   const modelId = useId();
   const tabId = useId();
   const categoryId = useId();
@@ -132,6 +175,9 @@ export function PromptForm({ initial, mode }: Props) {
 
   const [initialSnapshot, setInitialSnapshot] = useState<PromptFormState>(() => makeInitialState(initial));
   const [form, setForm] = useState<PromptFormState>(() => makeInitialState(initial));
+  const [showVibeTools, setShowVibeTools] = useState<boolean>(() =>
+    hasVibeData(makeInitialState(initial))
+  );
 
   const [imgTab, setImgTab] = useState<'upload' | 'url'>(() =>
     initial?.localImg ? 'upload' : initial?.imageUrl ? 'url' : 'upload'
@@ -139,12 +185,20 @@ export function PromptForm({ initial, mode }: Props) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [galleryUploading, setGalleryUploading] = useState(false);
+  const [galleryUrlInput, setGalleryUrlInput] = useState('');
+  const [galleryUrlError, setGalleryUrlError] = useState('');
+  const [customTagInput, setCustomTagInput] = useState('');
   const [suggestedAspect, setSuggestedAspect] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<{ promptText?: string; imageUrl?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{
+    promptText?: string;
+    imageUrl?: string;
+    previewUrl?: string;
+  }>({});
   const [submitError, setSubmitError] = useState('');
 
   const [discardOpen, setDiscardOpen] = useState(false);
@@ -179,34 +233,60 @@ export function PromptForm({ initial, mode }: Props) {
 
   function setField<K extends keyof PromptFormState>(key: K, value: PromptFormState[K]) {
     setForm((prev) => ({ ...prev, [key]: value }));
-    if (key === 'promptText' || key === 'imageUrl') {
+    if (key === 'promptText' || key === 'imageUrl' || key === 'previewUrl') {
       setFieldErrors((prev) => ({ ...prev, [key]: undefined }));
     }
   }
 
-  async function uploadFile(file: File) {
-    setUploadError('');
+  function applyPreset(preset: 'image' | 'vibe') {
+    if (preset === 'vibe') {
+      setShowVibeTools(true);
+      setForm((prev) => ({
+        ...prev,
+        tab: 'Vibe Coding',
+        category: 'Vibe Coding',
+        model: VIBE_MODEL_SET.has(prev.model) ? prev.model : 'Claude',
+        codeLanguage: prev.codeLanguage || 'tsx',
+        aspectRatio: prev.aspectRatio === '4/3' ? '16/9' : prev.aspectRatio,
+      }));
+    } else {
+      setForm((prev) => ({
+        ...prev,
+        tab: 'ChatGPT',
+        category: 'ChatGPT',
+        model: VIBE_MODEL_SET.has(prev.model) && prev.model !== 'ChatGPT' && prev.model !== 'Gemini'
+          ? 'ChatGPT'
+          : prev.model,
+        aspectRatio: prev.aspectRatio === '16/9' ? '4/3' : prev.aspectRatio,
+      }));
+    }
+  }
+
+  async function uploadSingleToR2(file: File): Promise<string> {
     if (!file.type.startsWith('image/')) {
-      setUploadError('Please select a valid image file (PNG, JPEG, GIF, WebP, or ICO).');
-      return;
+      throw new Error(`"${file.name}" is not a valid image file.`);
     }
     if (file.size > 10 * 1024 * 1024) {
-      setUploadError('Image exceeds the 10 MB upload limit.');
-      return;
+      throw new Error(`"${file.name}" exceeds the 10 MB upload limit.`);
     }
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.localImg) {
+      throw new Error(data.error || `Upload failed for ${file.name}.`);
+    }
+    return data.localImg as string;
+  }
 
+  async function uploadFile(file: File) {
+    setUploadError('');
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.localImg) {
-        throw new Error(data.error || 'Upload failed. Please try again.');
-      }
-      setField('localImg', data.localImg);
+      const localImg = await uploadSingleToR2(file);
+      setField('localImg', localImg);
       setSuggestedAspect(null);
-      toast({ title: 'Image uploaded to R2', variant: 'success', durationMs: 2500 });
+      toast({ title: 'Cover image uploaded to R2', variant: 'success', durationMs: 2500 });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Upload failed.';
       setUploadError(msg);
@@ -216,8 +296,146 @@ export function PromptForm({ initial, mode }: Props) {
     }
   }
 
+  async function uploadGalleryFiles(fileList: FileList | File[]) {
+    const files = Array.from(fileList);
+    if (files.length === 0) return;
+
+    const remaining = Math.max(0, 10 - form.galleryImages.length);
+    if (remaining === 0) {
+      toast({ title: 'Gallery limit reached (max 10 extra photos)', variant: 'info' });
+      return;
+    }
+
+    const slice = files.slice(0, remaining);
+    setGalleryUploading(true);
+    setGalleryUrlError('');
+    try {
+      const uploaded: string[] = [];
+      for (const file of slice) {
+        const url = await uploadSingleToR2(file);
+        uploaded.push(url);
+      }
+      setForm((prev) => ({
+        ...prev,
+        galleryImages: Array.from(new Set([...prev.galleryImages, ...uploaded])).slice(0, 10),
+      }));
+      toast({
+        title: `Uploaded ${uploaded.length} gallery ${uploaded.length === 1 ? 'photo' : 'photos'}`,
+        variant: 'success',
+        durationMs: 2500,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed.';
+      setGalleryUrlError(msg);
+      toast({ title: 'Gallery upload error', description: msg, variant: 'error' });
+    } finally {
+      setGalleryUploading(false);
+      if (galleryFileRef.current) galleryFileRef.current.value = '';
+    }
+  }
+
+  function addGalleryUrl() {
+    const u = galleryUrlInput.trim();
+    if (!u) return;
+    if (!(u.startsWith('/') || /^https?:\/\//i.test(u))) {
+      setGalleryUrlError('URL must start with https://, http://, or /');
+      return;
+    }
+    if (form.galleryImages.length >= 10) {
+      setGalleryUrlError('Maximum 10 extra photos allowed.');
+      return;
+    }
+    setGalleryUrlError('');
+    setForm((prev) => ({
+      ...prev,
+      galleryImages: prev.galleryImages.includes(u) ? prev.galleryImages : [...prev.galleryImages, u],
+    }));
+    setGalleryUrlInput('');
+  }
+
+  function moveGalleryPhoto(idx: number, delta: -1 | 1) {
+    const nextIdx = idx + delta;
+    if (nextIdx < 0 || nextIdx >= form.galleryImages.length) return;
+    setForm((prev) => {
+      const next = [...prev.galleryImages];
+      const [item] = next.splice(idx, 1);
+      next.splice(nextIdx, 0, item);
+      return { ...prev, galleryImages: next };
+    });
+  }
+
+  function promoteGalleryPhotoToCover(idx: number) {
+    const chosen = form.galleryImages[idx];
+    if (!chosen) return;
+    setForm((prev) => {
+      const oldCover = prev.localImg || prev.imageUrl;
+      const nextGallery = prev.galleryImages.filter((_, i) => i !== idx);
+      if (oldCover && oldCover !== chosen && !nextGallery.includes(oldCover)) {
+        nextGallery.unshift(oldCover);
+      }
+      return {
+        ...prev,
+        localImg: chosen,
+        imageUrl: prev.localImg ? prev.imageUrl : '',
+        galleryImages: nextGallery.slice(0, 10),
+      };
+    });
+    setImgTab('upload');
+    toast({ title: 'Updated primary cover photo', variant: 'info', durationMs: 2000 });
+  }
+
+  function toggleStackTag(tag: string) {
+    setForm((prev) => {
+      const exists = prev.stackTags.some((t) => t.toLowerCase() === tag.toLowerCase());
+      if (exists) {
+        return {
+          ...prev,
+          stackTags: prev.stackTags.filter((t) => t.toLowerCase() !== tag.toLowerCase()),
+        };
+      }
+      if (prev.stackTags.length >= 12) return prev;
+      return { ...prev, stackTags: [...prev.stackTags, tag] };
+    });
+  }
+
+  function addCustomTag() {
+    const clean = customTagInput.trim().slice(0, 40);
+    if (!clean) return;
+    setForm((prev) => {
+      if (prev.stackTags.some((t) => t.toLowerCase() === clean.toLowerCase()) || prev.stackTags.length >= 12) {
+        return prev;
+      }
+      return { ...prev, stackTags: [...prev.stackTags, clean] };
+    });
+    setCustomTagInput('');
+  }
+
+  async function handleCodeFileSelect(file: File) {
+    if (file.size > 512 * 1024) {
+      toast({ title: 'Code file is too large (max 512 KB)', variant: 'error' });
+      return;
+    }
+    const text = await file.text();
+    const detected = detectLanguageFromFilename(file.name);
+    setShowVibeTools(true);
+    setForm((prev) => ({
+      ...prev,
+      codeSnippet: text,
+      codeLanguage: detected,
+      title:
+        prev.title.trim() ||
+        file.name.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' '),
+    }));
+    toast({
+      title: `Loaded ${file.name} (${detected.toUpperCase()})`,
+      variant: 'success',
+      durationMs: 2500,
+    });
+    if (codeFileRef.current) codeFileRef.current.value = '';
+  }
+
   function validate(): boolean {
-    const nextErrors: { promptText?: string; imageUrl?: string } = {};
+    const nextErrors: { promptText?: string; imageUrl?: string; previewUrl?: string } = {};
     if (!form.promptText.trim()) {
       nextErrors.promptText = 'Prompt text is required.';
     }
@@ -226,6 +444,13 @@ export function PromptForm({ initial, mode }: Props) {
       const valid = u.startsWith('/') || /^https?:\/\//i.test(u);
       if (!valid) {
         nextErrors.imageUrl = 'URL must start with https://, http://, or /';
+      }
+    }
+    if (form.previewUrl.trim()) {
+      const p = form.previewUrl.trim();
+      const valid = p.startsWith('/') || /^https?:\/\//i.test(p);
+      if (!valid) {
+        nextErrors.previewUrl = 'Preview URL must start with https://, http://, or /';
       }
     }
     setFieldErrors(nextErrors);
@@ -254,9 +479,13 @@ export function PromptForm({ initial, mode }: Props) {
         toast({ title: 'Prompt created! Ready for next.', variant: 'success' });
         const resetState: PromptFormState = {
           ...form,
+          title: '',
           promptText: '',
           imageUrl: '',
           localImg: '',
+          galleryImages: [],
+          codeSnippet: '',
+          previewUrl: '',
           likes: 0,
           views: 0,
         };
@@ -264,6 +493,8 @@ export function PromptForm({ initial, mode }: Props) {
         setInitialSnapshot(resetState);
         setSuggestedAspect(null);
         if (fileRef.current) fileRef.current.value = '';
+        if (galleryFileRef.current) galleryFileRef.current.value = '';
+        if (codeFileRef.current) codeFileRef.current.value = '';
       } else {
         setSaved(true);
         setInitialSnapshot(form);
@@ -320,6 +551,10 @@ export function PromptForm({ initial, mode }: Props) {
     [form.model]
   );
 
+  const isVibeMode = showVibeTools || hasVibeData(form);
+  const isVibeClassification =
+    form.tab === 'Vibe Coding' || form.category === 'Vibe Coding';
+
   return (
     <form
       onSubmit={(e) => {
@@ -328,6 +563,64 @@ export function PromptForm({ initial, mode }: Props) {
       }}
       noValidate
     >
+      {/* Format Mode Switcher (Standard Visual vs Vibe Coding Website) */}
+      <div
+        className="mb-5 p-3.5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        style={{
+          backgroundColor: 'var(--adm-surface)',
+          border: '1px solid var(--adm-border)',
+        }}
+      >
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold" style={{ color: 'var(--adm-text)' }}>
+              Prompt Package Type
+            </span>
+            <AdminBadge variant={isVibeClassification ? 'info' : 'neutral'}>
+              {isVibeClassification ? 'Vibe Coding' : 'Visual / Image'}
+            </AdminBadge>
+          </div>
+          <p className="text-[12px] mt-0.5" style={{ color: 'var(--adm-text-muted)' }}>
+            Switch presets anytime — upload code snippets, multiple UI screenshots, stack tags, or standard image prompts.
+          </p>
+        </div>
+
+        <div
+          className="inline-flex items-center gap-1.5 p-1 rounded-xl shrink-0"
+          style={{
+            backgroundColor: 'var(--adm-surface-muted)',
+            border: '1px solid var(--adm-border)',
+          }}
+        >
+          <button
+            type="button"
+            onClick={() => applyPreset('image')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer"
+            style={{
+              backgroundColor: !isVibeClassification ? 'var(--adm-surface)' : 'transparent',
+              color: !isVibeClassification ? 'var(--adm-accent-text)' : 'var(--adm-text-muted)',
+              boxShadow: !isVibeClassification ? 'var(--adm-shadow-sm)' : 'none',
+            }}
+          >
+            <ImageIcon size={13} />
+            Image Prompt
+          </button>
+          <button
+            type="button"
+            onClick={() => applyPreset('vibe')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-all cursor-pointer"
+            style={{
+              backgroundColor: isVibeClassification ? 'var(--adm-surface)' : 'transparent',
+              color: isVibeClassification ? 'var(--adm-accent-text)' : 'var(--adm-text-muted)',
+              boxShadow: isVibeClassification ? 'var(--adm-shadow-sm)' : 'none',
+            }}
+          >
+            <Code2 size={13} />
+            Vibe Coding Website
+          </button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-[390px_1fr] gap-6 items-start">
         {/* Left Column: Visual Media, Gallery Card Preview & Styling */}
         <div className="flex flex-col gap-5">
@@ -392,21 +685,44 @@ export function PromptForm({ initial, mode }: Props) {
               )}
 
               {/* Preview overlay badges */}
-              <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-black/65 text-white backdrop-blur-sm">
-                  {form.model}
-                </span>
-                {!form.published && (
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-red-600/90 text-white">
-                    Draft
+              <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-black/65 text-white backdrop-blur-sm">
+                    {form.model}
                   </span>
-                )}
-                {form.featured && (
-                  <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-amber-500/95 text-black">
-                    Featured
+                  {form.codeSnippet.trim() && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-cyan-500/85 text-slate-950 backdrop-blur-sm">
+                      <Code2 size={10} />
+                      {(form.codeLanguage || 'code').toUpperCase()}
+                    </span>
+                  )}
+                  {!form.published && (
+                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-red-600/90 text-white">
+                      Draft
+                    </span>
+                  )}
+                  {form.featured && (
+                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-amber-500/95 text-black">
+                      Featured
+                    </span>
+                  )}
+                </div>
+
+                {form.galleryImages.length > 0 && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-black/70 text-white backdrop-blur-sm shrink-0">
+                    <Images size={10} />
+                    +{form.galleryImages.length}
                   </span>
                 )}
               </div>
+
+              {form.title.trim() && (
+                <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/80 via-black/45 to-transparent">
+                  <p className="text-[12px] font-semibold text-white truncate">
+                    {form.title}
+                  </p>
+                </div>
+              )}
             </div>
 
             {suggestedAspect && suggestedAspect !== form.aspectRatio && (
@@ -567,6 +883,177 @@ export function PromptForm({ initial, mode }: Props) {
             )}
           </AdminCard>
 
+          {/* Additional Related Photos Card (UI screenshots, mobile/desktop views, hover states) */}
+          <AdminCard padding="md">
+            <AdminSectionHeader
+              icon={Images}
+              title="Additional Reference Photos"
+              description="Upload extra website screenshots, desktop/mobile views, or style frames."
+              action={
+                <AdminBadge variant="neutral" className="font-mono tabular-nums">
+                  {form.galleryImages.length}/10
+                </AdminBadge>
+              }
+            />
+
+            <input
+              ref={galleryFileRef}
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/gif,image/webp,image/x-icon"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files?.length) void uploadGalleryFiles(e.target.files);
+              }}
+            />
+
+            <div className="flex items-center gap-2 mb-3">
+              <AdminButton
+                variant="outline"
+                size="sm"
+                loading={galleryUploading}
+                disabled={form.galleryImages.length >= 10}
+                onClick={() => galleryFileRef.current?.click()}
+                icon={<Upload size={13} />}
+              >
+                {galleryUploading ? 'Uploading…' : 'Upload Photos'}
+              </AdminButton>
+              {form.galleryImages.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setField('galleryImages', [])}
+                  className="text-[11.5px] font-medium px-2.5 py-1.5 rounded-lg cursor-pointer ml-auto"
+                  style={{
+                    backgroundColor: 'var(--adm-danger-bg)',
+                    color: 'var(--adm-danger-text)',
+                  }}
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 mb-3">
+              <div className="flex-1 min-w-0">
+                <label htmlFor={galleryUrlId} className="sr-only">
+                  Add extra photo URL
+                </label>
+                <AdminInput
+                  id={galleryUrlId}
+                  value={galleryUrlInput}
+                  onChange={(e) => {
+                    setGalleryUrlInput(e.target.value);
+                    setGalleryUrlError('');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addGalleryUrl();
+                    }
+                  }}
+                  placeholder="Paste screenshot URL (https://…)"
+                />
+              </div>
+              <AdminButton
+                variant="secondary"
+                size="sm"
+                onClick={addGalleryUrl}
+                disabled={!galleryUrlInput.trim() || form.galleryImages.length >= 10}
+                icon={<Plus size={13} />}
+              >
+                Add
+              </AdminButton>
+            </div>
+
+            {galleryUrlError && (
+              <p
+                role="alert"
+                className="mb-2.5 px-2.5 py-1.5 rounded-lg text-[11.5px]"
+                style={{
+                  backgroundColor: 'var(--adm-danger-bg)',
+                  border: '1px solid var(--adm-danger-border)',
+                  color: 'var(--adm-danger-text)',
+                }}
+              >
+                {galleryUrlError}
+              </p>
+            )}
+
+            {form.galleryImages.length > 0 ? (
+              <div className="grid grid-cols-2 gap-2.5">
+                {form.galleryImages.map((url, idx) => (
+                  <div
+                    key={`${url}-${idx}`}
+                    className="rounded-xl overflow-hidden border flex flex-col"
+                    style={{
+                      backgroundColor: 'var(--adm-surface-muted)',
+                      borderColor: 'var(--adm-border)',
+                    }}
+                  >
+                    <div className="relative aspect-video bg-black/20">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Gallery ${idx + 1}`} className="w-full h-full object-cover" />
+                      <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/65 text-white text-[10px] font-mono">
+                        #{idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setField(
+                            'galleryImages',
+                            form.galleryImages.filter((_, i) => i !== idx)
+                          )
+                        }
+                        className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-black/70 hover:bg-red-600 text-white flex items-center justify-center cursor-pointer transition-colors"
+                        aria-label={`Remove photo ${idx + 1}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between px-1.5 py-1 gap-1">
+                      <div className="flex items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => moveGalleryPhoto(idx, -1)}
+                          disabled={idx === 0}
+                          className="p-1 rounded hover:bg-black/5 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                          style={{ color: 'var(--adm-text-muted)' }}
+                          title="Move earlier"
+                          aria-label={`Move photo ${idx + 1} left`}
+                        >
+                          <ArrowLeft size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveGalleryPhoto(idx, 1)}
+                          disabled={idx === form.galleryImages.length - 1}
+                          className="p-1 rounded hover:bg-black/5 disabled:opacity-30 cursor-pointer disabled:cursor-not-allowed"
+                          style={{ color: 'var(--adm-text-muted)' }}
+                          title="Move later"
+                          aria-label={`Move photo ${idx + 1} right`}
+                        >
+                          <ArrowRight size={12} />
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => promoteGalleryPhotoToCover(idx)}
+                        className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded hover:underline cursor-pointer"
+                        style={{ color: 'var(--adm-accent-text)' }}
+                      >
+                        Set Cover
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11.5px]" style={{ color: 'var(--adm-text-subtle)' }}>
+                Optional: attach hover states, dark/light variants, or responsive views shown in the prompt studio viewer.
+              </p>
+            )}
+          </AdminCard>
+
           {/* Style & Frame Card */}
           <AdminCard padding="md">
             <AdminSectionHeader
@@ -680,7 +1167,260 @@ export function PromptForm({ initial, mode }: Props) {
                 className="font-mono text-[13px] leading-relaxed min-h-[210px] resize-y"
               />
             </AdminFormField>
+            <div className="flex items-center justify-between flex-wrap gap-2 mt-3 pt-3 border-t" style={{ borderColor: 'var(--adm-border)' }}>
+              <span className="text-[11.5px]" style={{ color: 'var(--adm-text-subtle)' }}>
+                {isVibeMode
+                  ? 'Vibe Coding fields enabled below for title, stack tags, code & live URL.'
+                  : 'Want to attach component code, UI title, or stack tags?'}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowVibeTools((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold cursor-pointer"
+                style={{ color: 'var(--adm-accent-text)' }}
+              >
+                <Code2 size={13} />
+                {isVibeMode ? 'Hide Code & Vibe Tools' : '+ Attach Code & Vibe UI Metadata'}
+              </button>
+            </div>
           </AdminCard>
+
+          {/* Vibe Coding & Code Package */}
+          {isVibeMode && (
+            <AdminCard padding="md">
+              <AdminSectionHeader
+                icon={Code2}
+                title="Vibe Coding Design & Code Package"
+                description="MotionSites-style metadata, source code snippet, stack tags, and optional live demo URL."
+                action={
+                  form.codeSnippet.trim() ? (
+                    <AdminBadge variant="info" className="font-mono tabular-nums">
+                      {form.codeSnippet.split(/\r?\n/).length} lines
+                    </AdminBadge>
+                  ) : undefined
+                }
+              />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <AdminFormField
+                  label="Design / Component Title"
+                  htmlFor={titleId}
+                  hint="Displayed as the headline in gallery hover & detail inspector."
+                >
+                  <AdminInput
+                    id={titleId}
+                    value={form.title}
+                    onChange={(e) => setField('title', e.target.value)}
+                    placeholder="e.g. Obsidian Bento SaaS Hero"
+                  />
+                </AdminFormField>
+
+                <AdminFormField
+                  label="Live Demo / Preview URL"
+                  htmlFor={previewUrlId}
+                  error={fieldErrors.previewUrl}
+                  hint="Optional deployed URL or CodePen/Vercel demo link."
+                >
+                  <div className="relative">
+                    <Globe
+                      size={13}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      style={{ color: 'var(--adm-text-subtle)' }}
+                    />
+                    <AdminInput
+                      id={previewUrlId}
+                      value={form.previewUrl}
+                      onChange={(e) => setField('previewUrl', e.target.value)}
+                      placeholder="https://demo.example.com"
+                      className="pl-8"
+                      aria-invalid={Boolean(fieldErrors.previewUrl)}
+                    />
+                  </div>
+                </AdminFormField>
+              </div>
+
+              {/* Stack & Style Tags */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span
+                    className="inline-flex items-center gap-1.5 text-[12px] font-semibold"
+                    style={{ color: 'var(--adm-text)' }}
+                  >
+                    <Layers size={12.5} />
+                    Stack &amp; UI Tags
+                  </span>
+                  <span className="text-[11px] font-mono tabular-nums" style={{ color: 'var(--adm-text-subtle)' }}>
+                    {form.stackTags.length}/12
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  {STACK_TAG_PRESETS.map((preset) => {
+                    const active = form.stackTags.some(
+                      (t) => t.toLowerCase() === preset.toLowerCase()
+                    );
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => toggleStackTag(preset)}
+                        className="px-2.5 py-1 rounded-full text-[11.5px] font-medium transition-all cursor-pointer border"
+                        style={{
+                          backgroundColor: active ? 'var(--adm-accent-soft)' : 'var(--adm-surface-muted)',
+                          borderColor: active ? 'var(--adm-accent)' : 'var(--adm-border)',
+                          color: active ? 'var(--adm-accent-text)' : 'var(--adm-text-muted)',
+                        }}
+                      >
+                        {active ? '✓ ' : '+ '}
+                        {preset}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 relative">
+                    <Tag
+                      size={12.5}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                      style={{ color: 'var(--adm-text-subtle)' }}
+                    />
+                    <label htmlFor={customTagId} className="sr-only">
+                      Add custom stack tag
+                    </label>
+                    <AdminInput
+                      id={customTagId}
+                      value={customTagInput}
+                      onChange={(e) => setCustomTagInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          addCustomTag();
+                        }
+                      }}
+                      placeholder="Add custom tag (e.g. GSAP, Pricing) & press Enter"
+                      className="pl-8"
+                    />
+                  </div>
+                  <AdminButton
+                    variant="outline"
+                    size="sm"
+                    onClick={addCustomTag}
+                    disabled={!customTagInput.trim() || form.stackTags.length >= 12}
+                  >
+                    Add Tag
+                  </AdminButton>
+                </div>
+
+                {form.stackTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                    {form.stackTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11.5px] font-medium border"
+                        style={{
+                          backgroundColor: 'var(--adm-info-bg)',
+                          borderColor: 'var(--adm-info-border)',
+                          color: 'var(--adm-info-text)',
+                        }}
+                      >
+                        {tag}
+                        <button
+                          type="button"
+                          onClick={() => toggleStackTag(tag)}
+                          className="hover:opacity-70 cursor-pointer"
+                          aria-label={`Remove tag ${tag}`}
+                        >
+                          <X size={11} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Language + Code File Upload + Code Editor */}
+              <div className="pt-3 border-t" style={{ borderColor: 'var(--adm-border)' }}>
+                <div className="flex flex-wrap items-end justify-between gap-3 mb-3">
+                  <div className="w-48">
+                    <AdminFormField label="Code Language" htmlFor={codeLangId}>
+                      <AdminSelect
+                        id={codeLangId}
+                        value={form.codeLanguage || 'tsx'}
+                        onChange={(e) => setField('codeLanguage', e.target.value)}
+                      >
+                        {CODE_LANGUAGES.map((lang) => (
+                          <option key={lang.value} value={lang.value}>
+                            {lang.label} (.{lang.ext})
+                          </option>
+                        ))}
+                      </AdminSelect>
+                    </AdminFormField>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <input
+                      ref={codeFileRef}
+                      type="file"
+                      accept=".tsx,.jsx,.html,.htm,.css,.scss,.ts,.js,.mjs,.vue,.svelte,.json,.txt,.md"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) void handleCodeFileSelect(f);
+                      }}
+                    />
+                    <AdminButton
+                      variant="outline"
+                      size="sm"
+                      onClick={() => codeFileRef.current?.click()}
+                      icon={<FileCode2 size={13} />}
+                    >
+                      Import Code File
+                    </AdminButton>
+                    {form.codeSnippet.trim() && (
+                      <button
+                        type="button"
+                        onClick={() => setField('codeSnippet', '')}
+                        className="text-[11.5px] font-medium px-2.5 py-1.5 rounded-lg cursor-pointer"
+                        style={{
+                          backgroundColor: 'var(--adm-danger-bg)',
+                          color: 'var(--adm-danger-text)',
+                        }}
+                      >
+                        Clear Code
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <AdminFormField
+                  label="Code Snippet / Component Source"
+                  htmlFor={codeSnippetId}
+                  hint={
+                    form.codeLanguage === 'html'
+                      ? 'HTML snippets render in a safe static sandboxed Live HTML preview + downloadable .html file.'
+                      : 'Displayed in the public syntax-lined IDE viewer with one-click Copy Code and file download.'
+                  }
+                >
+                  <AdminTextarea
+                    id={codeSnippetId}
+                    value={form.codeSnippet}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setField('codeSnippet', val);
+                      if (val.trim() && !form.codeLanguage) {
+                        setField('codeLanguage', 'tsx');
+                      }
+                    }}
+                    rows={12}
+                    spellCheck={false}
+                    placeholder={'Paste full TSX, HTML, CSS, or component code here (or click "Import Code File")…'}
+                    className="font-mono text-[12.5px] leading-relaxed min-h-[250px] resize-y"
+                  />
+                </AdminFormField>
+              </div>
+            </AdminCard>
+          )}
 
           {/* Classification */}
           <AdminCard padding="md">
@@ -698,7 +1438,11 @@ export function PromptForm({ initial, mode }: Props) {
                     const nextModel = e.target.value;
                     setField('model', nextModel);
                     if (mode === 'create') {
-                      const mapped = MODEL_TO_TAB[nextModel] || 'ChatGPT';
+                      const inVibe =
+                        form.tab === 'Vibe Coding' || form.category === 'Vibe Coding';
+                      const mapped = inVibe
+                        ? 'Vibe Coding'
+                        : MODEL_TO_TAB[nextModel] || 'ChatGPT';
                       setField('tab', mapped);
                       setField('category', mapped);
                     }

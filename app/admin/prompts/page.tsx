@@ -5,9 +5,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Plus, Search, Pencil, Trash2, Heart, Eye, ChevronLeft, ChevronRight,
   Star, EyeOff, CheckSquare, Square, Minus, X, SlidersHorizontal,
-  ArrowUpDown, CheckCircle2,
+  ArrowUpDown, CheckCircle2, Code2, Images,
 } from 'lucide-react';
 import type { AdminPromptSort, AdminPromptStatus, DbCategory, DbPrompt } from '@/lib/db';
+import { ALL_MODELS } from '@/lib/vibe-coding';
 import {
   AdminBadge, AdminButton, AdminCard, AdminEmptyState, AdminErrorState, AdminPageHeader,
 } from '@/components/admin/ui/Primitives';
@@ -15,10 +16,7 @@ import { ConfirmDialog } from '@/components/admin/ui/Dialog';
 import { useToast } from '@/components/admin/ui/ToastProvider';
 import { PromptDetailDrawer } from '@/components/admin/PromptDetailDrawer';
 
-const MODELS = [
-  'ChatGPT', 'GPT Image', 'Nanobanana Pro', 'Nanobanana 2', 'Seedance 2.0',
-  'Midjourney', 'DALL-E', 'Flux', 'Stable Diffusion', 'Adobe Firefly', 'Gemini', 'Leonardo AI',
-];
+const MODELS = [...ALL_MODELS];
 
 const STATUS_TABS: { value: AdminPromptStatus; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -36,6 +34,7 @@ function PromptsManagerContent() {
   const urlQ = searchParams.get('q') || '';
   const urlModel = searchParams.get('model') || '';
   const urlCategory = searchParams.get('category') || '';
+  const urlHasCode = searchParams.get('hasCode') === '1';
   const urlStatus = (searchParams.get('status') as AdminPromptStatus) || 'all';
   const urlSort = (searchParams.get('sort') as AdminPromptSort) || 'newest';
   const urlPage = Math.max(1, Number.parseInt(searchParams.get('page') || '1', 10) || 1);
@@ -60,6 +59,7 @@ function PromptsManagerContent() {
   if (urlQ) queryParams.set('q', urlQ);
   if (urlModel) queryParams.set('model', urlModel);
   if (urlCategory) queryParams.set('category', urlCategory);
+  if (urlHasCode) queryParams.set('hasCode', '1');
   const queryString = queryParams.toString();
   const requestKey = `${queryString}#${reloadTick}`;
   const loading = completedKey !== requestKey;
@@ -262,7 +262,7 @@ function PromptsManagerContent() {
     else setSelected(new Set(items.map((p) => p.id)));
   }
 
-  const hasFilters = Boolean(urlQ || urlModel || urlCategory || urlStatus !== 'all' || urlSort !== 'newest');
+  const hasFilters = Boolean(urlQ || urlModel || urlCategory || urlHasCode || urlStatus !== 'all' || urlSort !== 'newest');
   const pages = Math.max(1, Math.ceil(total / urlLimit));
   const allSelected = items.length > 0 && selected.size === items.length;
   const someSelected = selected.size > 0 && selected.size < items.length;
@@ -319,6 +319,22 @@ function PromptsManagerContent() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                aria-pressed={urlHasCode}
+                onClick={() => updateParams({ hasCode: urlHasCode ? undefined : '1', page: 1 })}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[12px] font-semibold transition-all cursor-pointer border"
+                style={{
+                  backgroundColor: urlHasCode ? 'var(--adm-accent-soft)' : 'var(--adm-surface-muted)',
+                  borderColor: urlHasCode ? 'var(--adm-accent)' : 'var(--adm-border)',
+                  color: urlHasCode ? 'var(--adm-accent-text)' : 'var(--adm-text-muted)',
+                }}
+                title="Show only prompts that include Vibe Coding source code"
+              >
+                <Code2 size={13} />
+                With Code
+              </button>
+
               <div className="flex items-center gap-1.5">
                 <ArrowUpDown size={13} style={{ color: 'var(--adm-text-subtle)' }} />
                 <select
@@ -563,11 +579,43 @@ function PromptsManagerContent() {
                               className="text-left font-medium line-clamp-2 text-[12.5px] leading-snug hover:underline cursor-pointer"
                               style={{ color: 'var(--adm-text)' }}
                             >
-                              {p.promptText}
+                              {p.title ? (
+                                <>
+                                  <span className="font-semibold">{p.title}</span>
+                                  <span className="font-normal opacity-75"> — {p.promptText}</span>
+                                </>
+                              ) : (
+                                p.promptText
+                              )}
                             </button>
-                            <p className="text-[11px] mt-0.5 truncate" style={{ color: 'var(--adm-text-subtle)' }}>
-                              {p.category} · {p.aspectRatio}
-                            </p>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className="text-[11px] truncate" style={{ color: 'var(--adm-text-subtle)' }}>
+                                {p.category} · {p.aspectRatio}
+                              </span>
+                              {(p.hasCode || p.codeSnippet?.trim()) && (
+                                <span
+                                  className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.2 rounded"
+                                  style={{
+                                    backgroundColor: 'var(--adm-info-bg)',
+                                    color: 'var(--adm-info-text)',
+                                  }}
+                                >
+                                  <Code2 size={10} />
+                                  {(p.codeLanguage || 'code').toUpperCase()}
+                                </span>
+                              )}
+                              {(p.galleryImages?.length ?? 0) > 0 && (
+                                <span
+                                  className="inline-flex items-center gap-0.5 text-[10px] font-medium px-1.5 py-0.2 rounded"
+                                  style={{
+                                    backgroundColor: 'var(--adm-surface-muted)',
+                                    color: 'var(--adm-text-muted)',
+                                  }}
+                                >
+                                  <Images size={10} />+{p.galleryImages?.length}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -750,11 +798,26 @@ function PromptsManagerContent() {
                         className="text-left text-[13px] font-medium line-clamp-2 leading-snug cursor-pointer"
                         style={{ color: 'var(--adm-text)' }}
                       >
-                        {p.promptText}
+                        {p.title ? (
+                          <>
+                            <span className="font-semibold">{p.title}</span>
+                            <span className="font-normal opacity-75"> — {p.promptText}</span>
+                          </>
+                        ) : (
+                          p.promptText
+                        )}
                       </button>
 
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         <AdminBadge variant="accent">{p.model}</AdminBadge>
+                        {(p.hasCode || p.codeSnippet?.trim()) && (
+                          <AdminBadge variant="info">
+                            {(p.codeLanguage || 'code').toUpperCase()}
+                          </AdminBadge>
+                        )}
+                        {(p.galleryImages?.length ?? 0) > 0 && (
+                          <AdminBadge variant="neutral">+{p.galleryImages?.length} photos</AdminBadge>
+                        )}
                         <AdminBadge variant={isPublished ? 'success' : 'danger'}>
                           {isPublished ? 'Published' : 'Draft'}
                         </AdminBadge>

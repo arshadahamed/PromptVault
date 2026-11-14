@@ -1,4 +1,5 @@
 import type { DbPrompt } from './db';
+import { isSafeHref } from './security';
 import type { Prompt } from './types';
 
 const AVATAR_COLORS = [
@@ -41,20 +42,33 @@ export function toPrompt(p: DbPrompt): Prompt {
   let hash = 0;
   for (const c of name) hash = (hash * 31 + c.charCodeAt(0)) % AVATAR_COLORS.length;
 
+  const fallbackExternal =
+    p.imageUrl && isSafeHref(p.imageUrl) && !p.imageUrl.includes('meigen.ai')
+      ? p.imageUrl
+      : '';
+  const primaryImg = p.localImg || fallbackExternal;
+
   return {
-    id:           p.id,
-    author:       { name, handle, initials, avatarColor: AVATAR_COLORS[Math.abs(hash)] },
-    model:        p.model as Prompt['model'],
-    category:     p.category as Prompt['category'],
-    tab:          p.tab as Prompt['tab'],
-    likes:        p.likes,
-    views:        p.views,
-    promptText:   p.promptText,
-    aspectRatio:  safeAspectRatio(p.aspectRatio),
-    gradientFrom: p.gradientFrom,
-    gradientTo:   p.gradientTo,
-    localImg:     p.localImg,
-    relatedIds:   [],
-    createdAt:    (p.createdAt || '').slice(0, 10),
+    id:            p.id,
+    title:         p.title || undefined,
+    author:        { name, handle, initials, avatarColor: AVATAR_COLORS[Math.abs(hash)] },
+    model:         p.model as Prompt['model'],
+    category:      p.category as Prompt['category'],
+    tab:           p.tab as Prompt['tab'],
+    likes:         p.likes,
+    views:         p.views,
+    promptText:    p.promptText,
+    aspectRatio:   safeAspectRatio(p.aspectRatio),
+    gradientFrom:  p.gradientFrom,
+    gradientTo:    p.gradientTo,
+    localImg:      primaryImg,
+    codeSnippet:   p.codeSnippet || undefined,
+    codeLanguage:  p.codeLanguage || undefined,
+    stackTags:     p.stackTags && p.stackTags.length > 0 ? p.stackTags : undefined,
+    galleryImages: p.galleryImages && p.galleryImages.length > 0 ? p.galleryImages : undefined,
+    previewUrl:    p.previewUrl || undefined,
+    hasCode:       Boolean(p.hasCode || (p.codeSnippet && p.codeSnippet.trim().length > 0)),
+    relatedIds:    [],
+    createdAt:     (p.createdAt || '').slice(0, 10),
   };
 }

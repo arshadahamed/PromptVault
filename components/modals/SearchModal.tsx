@@ -6,7 +6,7 @@ import { ModalShell } from './ModalShell';
 import { useApp } from '@/context/AppContext';
 import type { Prompt } from '@/lib/types';
 
-const QUICK_TERMS = ['Cyberpunk', 'Portrait', '3D Render', 'Minimalist', 'Product', 'Anime'];
+const QUICK_TERMS = ['Vibe Coding', 'Hero Section', 'Cyberpunk', 'Portrait', '3D Render', 'Minimalist', 'Landing Page', 'Anime'];
 
 export function SearchModal({ open }: { open: boolean }) {
   const [query, setQuery]               = useState('');
@@ -94,15 +94,23 @@ export function SearchModal({ open }: { open: boolean }) {
                   style={{ background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})` }}
                 >
                   {p.localImg && (
+                    // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.localImg} alt="" className="w-full h-full object-cover" loading="lazy" />
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-[12.5px] font-medium text-zinc-100 leading-snug line-clamp-2 group-hover:text-white">
-                    {p.promptText.slice(0, 110)}
+                    {p.title || p.promptText.slice(0, 110)}
                   </p>
-                  <p className="text-[11px] text-[#71717a] mt-1">
-                    {p.author.handle} · <span className="text-violet-400">{p.model}</span>
+                  <p className="text-[11px] text-[#71717a] mt-1 flex items-center gap-1.5">
+                    <span>{p.author.handle}</span>
+                    <span>·</span>
+                    <span className="text-violet-400">{p.model}</span>
+                    {p.hasCode && (
+                      <span className="px-1.5 py-0.2 rounded bg-cyan-500/15 text-cyan-300 text-[9.5px] font-semibold uppercase">
+                        {p.codeLanguage || 'Code'}
+                      </span>
+                    )}
                   </p>
                 </div>
                 <ArrowUpRight size={14} className="text-zinc-600 group-hover:text-zinc-300 shrink-0 mt-1" />

@@ -23,9 +23,11 @@ export async function generateMetadata({
 
   const siteName    = s.siteName || 'PromptVault';
   const snippet     = prompt.promptText.slice(0, 60).trimEnd();
-  const title       = `${snippet}… — ${siteName}`;
+  const baseTitle   = prompt.title?.trim() ? prompt.title.trim() : `${snippet}…`;
+  const title       = `${baseTitle} — ${siteName}`;
   const description = `${prompt.model} prompt in ${prompt.category}: ${prompt.promptText.slice(0, 140)}`;
-  const image       = isSafeHref(prompt.localImg) ? prompt.localImg : undefined;
+  const rawImg      = prompt.localImg || prompt.galleryImages?.[0] || '';
+  const image       = isSafeHref(rawImg) ? rawImg : undefined;
   const siteUrl     = process.env.NEXT_PUBLIC_SITE_URL || 'https://prompt-vault-seven-eta.vercel.app';
 
   return {

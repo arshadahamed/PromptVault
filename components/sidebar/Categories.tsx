@@ -1,17 +1,17 @@
 'use client';
 import { useState } from 'react';
-import { Layers, ChevronDown, Clock } from 'lucide-react';
+import { Layers, ChevronDown, Clock, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useApp } from '@/context/AppContext';
 import type { Tab } from '@/lib/types';
 
 const MODEL_TABS: { tab: Tab; dot: string }[] = [
-  { tab: 'All',        dot: '#a855f7' },
-  { tab: 'ChatGPT',    dot: '#10b981' },
-  { tab: 'Nanobanana', dot: '#f59e0b' },
-  { tab: 'Midjourney', dot: '#3b82f6' },
-  { tab: 'Flux',       dot: '#06b6d4' },
-  { tab: 'Seedance',   dot: '#ec4899' },
+  { tab: 'All',         dot: '#a855f7' },
+  { tab: 'ChatGPT',     dot: '#10b981' },
+  { tab: 'Nanobanana',  dot: '#f59e0b' },
+  { tab: 'Midjourney',  dot: '#3b82f6' },
+  { tab: 'Flux',        dot: '#06b6d4' },
+  { tab: 'Seedance',    dot: '#ec4899' },
 ];
 
 interface Props {
@@ -23,11 +23,45 @@ export function Categories({ tabCounts, onNavigate }: Props) {
   const [open, setOpen] = useState(true);
   const { activeTab, activeSort, setGalleryFilter } = useApp();
 
+  const vibeCount = tabCounts?.['Vibe Coding'];
+  const vibeActive = activeTab === 'Vibe Coding';
+
   return (
     <div className="px-2.5">
       <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#71717a]">
         Models &amp; Feeds
       </p>
+
+      <button
+        type="button"
+        onClick={() => {
+          setGalleryFilter({ tab: 'Vibe Coding' });
+          onNavigate?.();
+        }}
+        className={cn(
+          'flex items-center gap-3 w-full px-3 py-2 rounded-[10px] text-[13px] font-medium transition-all mb-1 cursor-pointer',
+          vibeActive
+            ? 'bg-cyan-500/15 text-cyan-200 font-semibold border border-cyan-400/25'
+            : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04] border border-transparent'
+        )}
+      >
+        <Code2
+          size={15}
+          strokeWidth={1.9}
+          className={vibeActive ? 'text-cyan-300' : 'text-cyan-400/80'}
+        />
+        <span className="truncate flex-1 text-left">Vibe Coding</span>
+        {typeof vibeCount === 'number' && (
+          <span
+            className={cn(
+              'text-[10px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums',
+              vibeActive ? 'bg-cyan-400/20 text-cyan-200' : 'bg-white/[0.05] text-[#71717a]'
+            )}
+          >
+            {vibeCount.toLocaleString()}
+          </span>
+        )}
+      </button>
 
       <button
         type="button"

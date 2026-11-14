@@ -1,15 +1,16 @@
 'use client';
 import { cn } from '@/lib/utils';
 import { type Tab, type Sort } from '@/lib/types';
-import { Flame, Clock, Sparkles } from 'lucide-react';
+import { Flame, Clock, Sparkles, Code2 } from 'lucide-react';
 
 const TAB_CONFIG: { tab: Tab; dot: string }[] = [
-  { tab: 'All',        dot: '#a855f7' },
-  { tab: 'ChatGPT',    dot: '#10b981' },
-  { tab: 'Nanobanana', dot: '#f59e0b' },
-  { tab: 'Midjourney', dot: '#3b82f6' },
-  { tab: 'Flux',       dot: '#06b6d4' },
-  { tab: 'Seedance',   dot: '#ec4899' },
+  { tab: 'All',         dot: '#a855f7' },
+  { tab: 'Vibe Coding', dot: '#22d3ee' },
+  { tab: 'ChatGPT',     dot: '#10b981' },
+  { tab: 'Nanobanana',  dot: '#f59e0b' },
+  { tab: 'Midjourney',  dot: '#3b82f6' },
+  { tab: 'Flux',        dot: '#06b6d4' },
+  { tab: 'Seedance',    dot: '#ec4899' },
 ];
 
 const SORTS: { value: Sort; icon: React.ElementType; activeColor: string }[] = [
@@ -58,8 +59,9 @@ export function TabBar({
         >
           {TAB_CONFIG.map(({ tab, dot }) => {
             const count = tabCounts?.[tab];
-            if (tab !== 'All' && count === 0) return null;
+            if (tab !== 'All' && tab !== 'Vibe Coding' && count === 0) return null;
             const active = activeTab === tab;
+            const isCodeTab = tab === 'Vibe Coding';
             return (
               <button
                 key={tab}
@@ -74,20 +76,31 @@ export function TabBar({
                 style={
                   active
                     ? {
-                        background:
-                          'linear-gradient(135deg, rgba(124,58,237,0.92), rgba(79,70,229,0.9))',
-                        boxShadow: '0 4px 16px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.2)',
+                        background: isCodeTab
+                          ? 'linear-gradient(135deg, rgba(6,182,212,0.9), rgba(79,70,229,0.92))'
+                          : 'linear-gradient(135deg, rgba(124,58,237,0.92), rgba(79,70,229,0.9))',
+                        boxShadow: isCodeTab
+                          ? '0 4px 16px rgba(6,182,212,0.32), inset 0 1px 0 rgba(255,255,255,0.22)'
+                          : '0 4px 16px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.2)',
                       }
                     : undefined
                 }
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full shrink-0"
-                  style={{
-                    background: active ? '#ffffff' : dot,
-                    boxShadow: active ? 'none' : `0 0 6px ${dot}88`,
-                  }}
-                />
+                {isCodeTab ? (
+                  <Code2
+                    size={12}
+                    style={{ color: active ? '#ffffff' : dot }}
+                    className="shrink-0"
+                  />
+                ) : (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{
+                      background: active ? '#ffffff' : dot,
+                      boxShadow: active ? 'none' : `0 0 6px ${dot}88`,
+                    }}
+                  />
+                )}
                 <span>{tab}</span>
                 {typeof count === 'number' && (
                   <span

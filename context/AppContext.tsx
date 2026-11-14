@@ -23,7 +23,7 @@ interface AppCtx {
 }
 
 const VALID_TABS = new Set<Tab>([
-  'All', 'ChatGPT', 'Nanobanana', 'Midjourney', 'Flux', 'Seedance', 'Gemini', 'Adobe Firefly',
+  'All', 'Vibe Coding', 'ChatGPT', 'Nanobanana', 'Midjourney', 'Flux', 'Seedance', 'Gemini', 'Adobe Firefly',
 ]);
 const VALID_SORTS = new Set<Sort>(['Featured', 'Newest', 'Popular']);
 

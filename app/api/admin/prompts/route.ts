@@ -8,6 +8,11 @@ import {
 } from '@/lib/db';
 import { requireAdmin } from '@/lib/admin-auth';
 import { isSafeHref, parsePositiveInt } from '@/lib/security';
+import {
+  normalizeCodeLanguage,
+  sanitizeSafeUrls,
+  sanitizeStringArray,
+} from '@/lib/vibe-coding';
 
 const ALLOWED_STATUS = new Set<AdminPromptStatus>(['all', 'published', 'draft', 'featured']);
 const ALLOWED_SORT = new Set<AdminPromptSort>(['newest', 'oldest', 'likes', 'views']);
@@ -17,15 +22,16 @@ export async function GET(req: NextRequest) {
   if (authErr) return authErr;
 
   const sp = req.nextUrl.searchParams;
-  const q        = sp.get('q') || '';
-  const model    = sp.get('model') || '';
-  const category = sp.get('category') || '';
+  const q         = sp.get('q') || '';
+  const model     = sp.get('model') || '';
+  const category  = sp.get('category') || '';
   const rawStatus = (sp.get('status') || 'all') as AdminPromptStatus;
   const rawSort   = (sp.get('sort') || 'newest') as AdminPromptSort;
-  const status   = ALLOWED_STATUS.has(rawStatus) ? rawStatus : 'all';
-  const sort     = ALLOWED_SORT.has(rawSort) ? rawSort : 'newest';
-  const page     = parsePositiveInt(sp.get('page'), 1, 10000);
-  const limit    = parsePositiveInt(sp.get('limit'), 20, 100);
+  const status    = ALLOWED_STATUS.has(rawStatus) ? rawStatus : 'all';
+  const sort      = ALLOWED_SORT.has(rawSort) ? rawSort : 'newest';
+  const hasCode   = sp.get('hasCode') === '1' ? true : undefined;
+  const page      = parsePositiveInt(sp.get('page'), 1, 10000);
+  const limit     = parsePositiveInt(sp.get('limit'), 20, 100);
 
   try {
     const { items, total } = await getAdminPromptsPaginated({
@@ -33,6 +39,7 @@ export async function GET(req: NextRequest) {
       model,
       category,
       status,
+      hasCode,
       sort,
       page,
       limit,
@@ -62,6 +69,7 @@ export async function POST(req: NextRequest) {
 
   const rawImageUrl = typeof data.imageUrl === 'string' ? data.imageUrl.trim() : '';
   const rawLocalImg = typeof data.localImg === 'string' ? data.localImg.trim() : '';
+  const rawPreviewUrl = typeof data.previewUrl === 'string' ? data.previewUrl.trim() : '';
 
   if (rawImageUrl && !isSafeHref(rawImageUrl)) {
     return NextResponse.json({ error: 'Invalid imageUrl' }, { status: 400 });
@@ -69,8 +77,20 @@ export async function POST(req: NextRequest) {
   if (rawLocalImg && !isSafeHref(rawLocalImg)) {
     return NextResponse.json({ error: 'Invalid localImg' }, { status: 400 });
   }
+  if (rawPreviewUrl && !isSafeHref(rawPreviewUrl)) {
+    return NextResponse.json({ error: 'Invalid previewUrl' }, { status: 400 });
+  }
+
+  const galleryImages = sanitizeSafeUrls(data.galleryImages, 12);
+  const stackTags = sanitizeStringArray(data.stackTags, 20, 40);
+  const codeSnippet = typeof data.codeSnippet === 'string' ? data.codeSnippet.slice(0, 200_000) : '';
+  const codeLanguage = codeSnippet.trim()
+    ? normalizeCodeLanguage(data.codeLanguage) || 'tsx'
+    : normalizeCodeLanguage(data.codeLanguage);
+  const title = typeof data.title === 'string' ? data.title.trim().slice(0, 140) : '';
 
   const prompt = await createPrompt({
+    title,
     promptText,
     imageUrl:     rawImageUrl,
     localImg:     rawLocalImg,
@@ -86,6 +106,11 @@ export async function POST(req: NextRequest) {
     aspectRatio:  typeof data.aspectRatio  === 'string' ? data.aspectRatio  : '4/3',
     featured:     typeof data.featured     === 'boolean' ? data.featured    : false,
     published:    typeof data.published    === 'boolean' ? data.published   : true,
+    codeSnippet,
+    codeLanguage,
+    stackTags,
+    galleryImages,
+    previewUrl:   rawPreviewUrl,
   });
 
   revalidateTag('prompts', 'max');

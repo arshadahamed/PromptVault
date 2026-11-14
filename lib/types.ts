@@ -12,10 +12,18 @@ export type Model =
   | 'Adobe Firefly'
   | 'Leonardo AI'
   | 'GPT Image'
-  | 'Seedance 2.0';
+  | 'Seedance 2.0'
+  | 'Claude'
+  | 'Cursor'
+  | 'Lovable'
+  | 'Bolt.new'
+  | 'v0'
+  | 'Replit'
+  | 'Windsurf';
 
 export type Category =
   | 'All'
+  | 'Vibe Coding'
   | 'ChatGPT'
   | 'Gemini'
   | 'Midjourney'
@@ -29,6 +37,7 @@ export type Category =
 
 export type Tab =
   | 'All'
+  | 'Vibe Coding'
   | 'ChatGPT'
   | 'Nanobanana'
   | 'Midjourney'
@@ -48,6 +57,7 @@ export interface Author {
 
 export interface Prompt {
   id: string;
+  title?: string;
   author: Author;
   model: Model;
   category: Category;
@@ -59,6 +69,12 @@ export interface Prompt {
   gradientFrom: string;
   gradientTo: string;
   localImg?: string;
+  codeSnippet?: string;
+  codeLanguage?: string;
+  stackTags?: string[];
+  galleryImages?: string[];
+  previewUrl?: string;
+  hasCode?: boolean;
   relatedIds: string[];
   createdAt: string;
 }

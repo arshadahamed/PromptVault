@@ -56,7 +56,7 @@ function HeroHeader({
             <span className="gradient-text">Visual Inspiration</span>
           </h1>
           <p className="text-[13.5px] text-zinc-400 mt-1.5 leading-relaxed">
-            Copy production-ready prompts for ChatGPT, Nanobanana, Midjourney, Flux &amp; Seedance in one click.
+            Copy production-ready prompts &amp; code for Vibe Coding websites, ChatGPT, Nanobanana, Midjourney, Flux &amp; Seedance in one click.
           </p>
         </div>
 
@@ -255,6 +255,7 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
         <h1>Free AI Prompt Gallery — ChatGPT, Nanobanana, Midjourney, Flux</h1>
         <p>Browse {initialTotal.toLocaleString()}+ free AI prompts and visual inspiration.</p>
         <nav aria-label="Model categories">
+          <Link href="/?tab=Vibe%20Coding">Vibe Coding Website Prompts &amp; Code</Link>
           <Link href="/?tab=ChatGPT">ChatGPT Prompts</Link>
           <Link href="/?tab=Nanobanana">Nanobanana Prompts</Link>
           <Link href="/?tab=Midjourney">Midjourney Prompts</Link>

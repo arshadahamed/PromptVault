@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   if (model) prompts = prompts.filter((p) => p.model === model);
 
   if (format === 'csv') {
-    const cols = ['id', 'promptText', 'model', 'category', 'tab', 'authorName', 'handle', 'likes', 'views', 'featured', 'published', 'createdAt'] as const;
+    const cols = ['id', 'title', 'promptText', 'model', 'category', 'tab', 'codeLanguage', 'hasCode', 'previewUrl', 'authorName', 'handle', 'likes', 'views', 'featured', 'published', 'createdAt'] as const;
     const rows = [
       cols.join(','),
       ...prompts.map((p) => cols.map((c) => escapeCsvCell(p[c])).join(',')),

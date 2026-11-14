@@ -4,10 +4,13 @@ import { supabase } from './supabase';
 import { sanitizePromptIds, sanitizeSearchQuery } from './security';
 
 const PUBLIC_GALLERY_COLUMNS =
-  'id, prompt_text, local_img, author_name, handle, model, category, tab, likes, views, gradient_from, gradient_to, aspect_ratio, created_at, featured';
+  'id, title, prompt_text, image_url, local_img, author_name, handle, model, category, tab, likes, views, gradient_from, gradient_to, aspect_ratio, created_at, featured, code_language, stack_tags, gallery_images, preview_url, has_code';
+
+const PUBLIC_DETAIL_COLUMNS = `${PUBLIC_GALLERY_COLUMNS}, code_snippet`;
 
 export const GALLERY_TABS = [
   'All',
+  'Vibe Coding',
   'ChatGPT',
   'Nanobanana',
   'Midjourney',
@@ -20,6 +23,7 @@ export const GALLERY_TABS = [
 export interface DbPrompt {
   id: string;
   sourceId?: string;
+  title?: string;
   promptText: string;
   imageUrl: string;
   localImg: string;
@@ -37,6 +41,12 @@ export interface DbPrompt {
   updatedAt: string;
   featured?: boolean;
   published?: boolean;
+  codeSnippet?: string;
+  codeLanguage?: string;
+  stackTags?: string[];
+  galleryImages?: string[];
+  previewUrl?: string;
+  hasCode?: boolean;
 }
 
 export interface DbCategory {
@@ -50,47 +60,60 @@ export interface DbCategory {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function fromRow(row: any): DbPrompt {
   return {
-    id:           row.id,
-    sourceId:     row.source_id ?? undefined,
-    promptText:   row.prompt_text,
-    imageUrl:     row.image_url ?? '',
-    localImg:     row.local_img ?? '',
-    authorName:   row.author_name ?? 'Admin',
-    handle:       row.handle ?? '@admin',
-    model:        row.model,
-    category:     row.category,
-    tab:          row.tab,
-    likes:        row.likes ?? 0,
-    views:        row.views ?? 0,
-    gradientFrom: row.gradient_from ?? '#d4f5b4',
-    gradientTo:   row.gradient_to ?? '#f5b4e8',
-    aspectRatio:  row.aspect_ratio ?? '4/3',
-    createdAt:    row.created_at,
-    updatedAt:    row.updated_at,
-    featured:     row.featured ?? false,
-    published:    row.published ?? true,
+    id:            row.id,
+    sourceId:      row.source_id ?? undefined,
+    title:         typeof row.title === 'string' ? row.title : '',
+    promptText:    row.prompt_text,
+    imageUrl:      row.image_url ?? '',
+    localImg:      row.local_img ?? '',
+    authorName:    row.author_name ?? 'Admin',
+    handle:        row.handle ?? '@admin',
+    model:         row.model,
+    category:      row.category,
+    tab:           row.tab,
+    likes:         row.likes ?? 0,
+    views:         row.views ?? 0,
+    gradientFrom:  row.gradient_from ?? '#d4f5b4',
+    gradientTo:    row.gradient_to ?? '#f5b4e8',
+    aspectRatio:   row.aspect_ratio ?? '4/3',
+    createdAt:     row.created_at,
+    updatedAt:     row.updated_at,
+    featured:      row.featured ?? false,
+    published:     row.published ?? true,
+    codeSnippet:   typeof row.code_snippet === 'string' ? row.code_snippet : '',
+    codeLanguage:  typeof row.code_language === 'string' ? row.code_language : '',
+    stackTags:     Array.isArray(row.stack_tags) ? row.stack_tags.filter((x: unknown): x is string => typeof x === 'string') : [],
+    galleryImages: Array.isArray(row.gallery_images) ? row.gallery_images.filter((x: unknown): x is string => typeof x === 'string') : [],
+    previewUrl:    typeof row.preview_url === 'string' ? row.preview_url : '',
+    hasCode:       Boolean(row.has_code ?? (typeof row.code_snippet === 'string' && row.code_snippet.trim().length > 0)),
   };
 }
 
 function toRow(p: Partial<DbPrompt>): Record<string, unknown> {
   const r: Record<string, unknown> = {};
-  if (p.id !== undefined)           r.id = p.id;
-  if (p.sourceId !== undefined)     r.source_id = p.sourceId;
-  if (p.promptText !== undefined)   r.prompt_text = p.promptText;
-  if (p.imageUrl !== undefined)     r.image_url = p.imageUrl;
-  if (p.localImg !== undefined)     r.local_img = p.localImg;
-  if (p.authorName !== undefined)   r.author_name = p.authorName;
-  if (p.handle !== undefined)       r.handle = p.handle;
-  if (p.model !== undefined)        r.model = p.model;
-  if (p.category !== undefined)     r.category = p.category;
-  if (p.tab !== undefined)          r.tab = p.tab;
-  if (p.likes !== undefined)        r.likes = p.likes;
-  if (p.views !== undefined)        r.views = p.views;
-  if (p.gradientFrom !== undefined) r.gradient_from = p.gradientFrom;
-  if (p.gradientTo !== undefined)   r.gradient_to = p.gradientTo;
-  if (p.aspectRatio !== undefined)  r.aspect_ratio = p.aspectRatio;
-  if (p.featured !== undefined)     r.featured = p.featured;
-  if (p.published !== undefined)    r.published = p.published;
+  if (p.id !== undefined)            r.id = p.id;
+  if (p.sourceId !== undefined)      r.source_id = p.sourceId;
+  if (p.title !== undefined)         r.title = p.title;
+  if (p.promptText !== undefined)    r.prompt_text = p.promptText;
+  if (p.imageUrl !== undefined)      r.image_url = p.imageUrl;
+  if (p.localImg !== undefined)      r.local_img = p.localImg;
+  if (p.authorName !== undefined)    r.author_name = p.authorName;
+  if (p.handle !== undefined)        r.handle = p.handle;
+  if (p.model !== undefined)         r.model = p.model;
+  if (p.category !== undefined)      r.category = p.category;
+  if (p.tab !== undefined)           r.tab = p.tab;
+  if (p.likes !== undefined)         r.likes = p.likes;
+  if (p.views !== undefined)         r.views = p.views;
+  if (p.gradientFrom !== undefined)  r.gradient_from = p.gradientFrom;
+  if (p.gradientTo !== undefined)    r.gradient_to = p.gradientTo;
+  if (p.aspectRatio !== undefined)   r.aspect_ratio = p.aspectRatio;
+  if (p.featured !== undefined)      r.featured = p.featured;
+  if (p.published !== undefined)     r.published = p.published;
+  if (p.codeSnippet !== undefined)   r.code_snippet = p.codeSnippet;
+  if (p.codeLanguage !== undefined)  r.code_language = p.codeLanguage;
+  if (p.stackTags !== undefined)     r.stack_tags = p.stackTags;
+  if (p.galleryImages !== undefined) r.gallery_images = p.galleryImages;
+  if (p.previewUrl !== undefined)    r.preview_url = p.previewUrl;
   return r;
 }
 
@@ -115,7 +138,10 @@ export const getPromptsPaginated = unstable_cache(
       .select(PUBLIC_GALLERY_COLUMNS)
       .eq('published', true);
 
-    if (tab && tab !== 'All') q = q.eq('tab', tab);
+    if (tab && tab !== 'All') {
+      if (tab === 'Vibe Coding') q = q.or('tab.eq.Vibe Coding,category.eq.Vibe Coding');
+      else q = q.eq('tab', tab);
+    }
 
     if (sort === 'Popular')       q = q.order('likes',      { ascending: false });
     else if (sort === 'Newest')   q = q.order('created_at', { ascending: false });
@@ -135,7 +161,10 @@ export const getPromptsPaginated = unstable_cache(
 export const getPromptCount = unstable_cache(
   async (tab = 'All'): Promise<number> => {
     let q = supabase.from('prompts').select('id', { count: 'exact', head: true }).eq('published', true);
-    if (tab !== 'All') q = q.eq('tab', tab);
+    if (tab !== 'All') {
+      if (tab === 'Vibe Coding') q = q.or('tab.eq.Vibe Coding,category.eq.Vibe Coding');
+      else q = q.eq('tab', tab);
+    }
     const { count, error } = await q;
     if (error) throw new Error(error.message);
     return count ?? 0;
@@ -165,7 +194,7 @@ export async function searchPublishedPrompts(rawQuery: string, limit = 12): Prom
     .from('prompts')
     .select(PUBLIC_GALLERY_COLUMNS)
     .eq('published', true)
-    .or(`prompt_text.ilike.${pct},model.ilike.${pct},category.ilike.${pct},author_name.ilike.${pct}`)
+    .or(`title.ilike.${pct},prompt_text.ilike.${pct},model.ilike.${pct},category.ilike.${pct},author_name.ilike.${pct}`)
     .order('likes', { ascending: false })
     .limit(Math.min(Math.max(1, limit), 24));
   if (error) return [];
@@ -194,7 +223,7 @@ export const getPublishedPromptWithRelated = unstable_cache(
 
     const { data: row, error } = await supabase
       .from('prompts')
-      .select(PUBLIC_GALLERY_COLUMNS)
+      .select(PUBLIC_DETAIL_COLUMNS)
       .eq('id', id)
       .eq('published', true)
       .maybeSingle();
@@ -339,6 +368,7 @@ export interface AdminPromptsQuery {
   model?: string;
   category?: string;
   status?: AdminPromptStatus;
+  hasCode?: boolean;
   sort?: AdminPromptSort;
   page?: number;
   limit?: number;
@@ -350,6 +380,7 @@ export async function getAdminPromptsPaginated({
   model = '',
   category = '',
   status = 'all',
+  hasCode,
   sort = 'newest',
   page = 1,
   limit = 20,
@@ -360,7 +391,7 @@ export async function getAdminPromptsPaginated({
   if (cleanQ) {
     const pct = `%${cleanQ}%`;
     query = query.or(
-      `prompt_text.ilike.${pct},model.ilike.${pct},category.ilike.${pct},author_name.ilike.${pct},handle.ilike.${pct}`
+      `title.ilike.${pct},prompt_text.ilike.${pct},model.ilike.${pct},category.ilike.${pct},author_name.ilike.${pct},handle.ilike.${pct}`
     );
   }
   if (model) query = query.eq('model', model);
@@ -368,6 +399,7 @@ export async function getAdminPromptsPaginated({
   if (status === 'published') query = query.eq('published', true);
   else if (status === 'draft') query = query.eq('published', false);
   else if (status === 'featured') query = query.eq('featured', true);
+  if (hasCode === true) query = query.eq('has_code', true);
 
   if (sort === 'oldest') query = query.order('created_at', { ascending: true });
   else if (sort === 'likes') query = query.order('likes', { ascending: false }).order('created_at', { ascending: false });
