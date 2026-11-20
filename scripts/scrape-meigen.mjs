@@ -170,7 +170,7 @@ export function parseArgs(argv) {
     else if (a.startsWith('--limit=')) out.limit = parseInt(a.slice('--limit='.length), 10);
     else if (a.startsWith('--sort=')) out.sort = a.slice('--sort='.length);
   }
-  const VALID_SORTS = ['newest', 'featured', 'popular', 'all'];
+  const VALID_SORTS = ['newest', 'latest', 'featured', 'popular', 'all'];
   if (!VALID_SORTS.includes(out.sort)) {
     throw new Error(`invalid --sort: ${out.sort} (use ${VALID_SORTS.join('|')})`);
   }
@@ -222,11 +222,12 @@ export async function loadExistingSourceIds(supabase) {
 }
 
 export async function fetchPage(page, { sort, offset, limit }) {
-  return page.evaluate(async ({ sort, offset, limit }) => {
-    const res = await fetch(`/api/images?sort=${sort}&offset=${offset}&limit=${limit}`);
+  const apiSort = sort === 'newest' ? 'latest' : sort;
+  return page.evaluate(async ({ apiSort, offset, limit }) => {
+    const res = await fetch(`/api/images?sort=${apiSort}&offset=${offset}&limit=${limit}`);
     if (!res.ok) throw new Error(`api ${res.status}`);
     return res.json();
-  }, { sort, offset, limit });
+  }, { apiSort, offset, limit });
 }
 
 export async function objectExists(r2, { bucket, key }) {
@@ -333,7 +334,7 @@ export function isPlausiblePrompt(text) {
  * @returns {{ newRows: object[], uploaded: number, fallbackUsed: number, errors: string[] }}
  */
 export async function runSort(browser, sort, seen, nextId, r2, args, R2_BUCKET, R2_PUBLIC_URL) {
-  console.log(`\n📡 Sort="${sort}" — starting…`);
+  console.log(`\n📡 Sort="${sort}" — starting (fast parallel mode)…`);
   const newRows = [];
   const errors = [];
   let uploaded = 0;
@@ -343,132 +344,147 @@ export async function runSort(browser, sort, seen, nextId, r2, args, R2_BUCKET, 
   let flushedCount = 0;
   const LIMIT = args.limit ?? Infinity;
   const unmappedModels = new Set();
+  const PAGES_PER_BATCH = 5; // fetch 5 pages (100 items) per round
 
-  /**
-   * Creates a fresh browser context, loads the homepage (to get a valid Cloudflare
-   * clearance cookie), then calls the paginated API from inside that page session.
-   * A new context is used for every page fetch — this is the proven pattern for
-   * bypassing Cloudflare's session-level bot detection.
-   */
-  const fetchPageFresh = async ({ sort, offset }) => {
-    const ctx = await browser.newContext({ userAgent: UA });
-    const page = await ctx.newPage();
+  let sharedCtx = null;
+  let sharedPage = null;
+
+  const ensureSession = async (forceNew = false) => {
+    if (forceNew && sharedCtx) {
+      try { await sharedCtx.close(); } catch {}
+      sharedCtx = null;
+      sharedPage = null;
+    }
+    if (!sharedPage) {
+      sharedCtx = await browser.newContext({ userAgent: UA });
+      sharedPage = await sharedCtx.newPage();
+      await sharedPage.goto('https://www.meigen.ai/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    }
+    return sharedPage;
+  };
+
+  const fetchBatch = async (startOffset) => {
+    const offsets = Array.from({ length: PAGES_PER_BATCH }, (_, i) => startOffset + i * 20);
     try {
-      await page.goto('https://www.meigen.ai/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-      return await fetchPage(page, { sort, offset, limit: 20 });
-    } finally {
-      await ctx.close();
+      const page = await ensureSession(false);
+      return await Promise.all(offsets.map((off) => fetchPage(page, { sort, offset: off, limit: 20 })));
+    } catch {
+      // Refresh session on error and retry once
+      const page = await ensureSession(true);
+      return await Promise.all(offsets.map((off) => fetchPage(page, { sort, offset: off, limit: 20 })));
     }
   };
 
-  while (newRows.length < LIMIT) {
-    // Fresh-context fetch with exponential back-off on transient errors
-    let body;
+  const uploadItemImage = async (sid, imageUrl) => {
+    if (args.dryRun || !imageUrl) return false;
+    const key = `${sid}.jpg`;
     try {
-      body = await withBackoff(
-        () => fetchPageFresh({ sort, offset }),
-        { maxAttempts: 3, baseMs: 2000 }
-      );
+      if (!(await objectExists(r2, { bucket: R2_BUCKET, key }))) {
+        const imgRes = await fetch(imageUrl);
+        if (imgRes.ok) {
+          const buf = Buffer.from(await imgRes.arrayBuffer());
+          await uploadImageToR2(r2, { bucket: R2_BUCKET, sourceId: sid, buffer: buf });
+          return true;
+        } else {
+          console.warn(`  image ${sid}: HTTP ${imgRes.status}`);
+        }
+      }
     } catch (e) {
-      const msg = `offset=${offset} sort=${sort}: ${e.message}`;
-      console.warn(`  ⚠ ${msg}`);
-      errors.push(msg);
-      break;
+      console.warn(`  image ${sid}: ${e.message}`);
     }
+    return false;
+  };
 
-    const items = body.images || [];
-    if (items.length === 0) break;
-
-    let newOnPage = 0;
-    for (const item of items) {
-      const sid = String(item.id || '');
-      if (!sid || seen.has(sid)) continue;
-
-      const { ok, needsFallback } = isIngestableOrFallback(item);
-      if (!ok) continue;
-
-      // ── Fallback: scrape prompt from detail page via fresh context ──
-      if (needsFallback) {
-        process.stdout.write(`  [fallback] ${sid.slice(0, 20)}… `);
-        const fbCtx = await browser.newContext({ userAgent: UA });
-        const fbPage = await fbCtx.newPage();
-        try {
-          const scrapedPrompt = await scrapePromptFallback(fbPage, item);
-          if (scrapedPrompt.length > 0) {
-            item.prompt = scrapedPrompt;
-            item.promptReady = true;
-            fallbackUsed++;
-            console.log(`✓ ${scrapedPrompt.length}ch`);
-          } else {
-            console.log(`⚠ no prompt found — skipping`);
-            continue; // can't ingest without prompt
-          }
-        } finally {
-          await fbCtx.close();
-        }
-      }
-
-      seen.add(sid);
-      newOnPage++;
-      const id = nextId();
-      const { row, unmapped } = mapItemToRow(item, { id, r2PublicUrl: R2_PUBLIC_URL });
-      if (unmapped) unmappedModels.add(item.model || '(empty)');
-
-      // ── Upload image to R2 ──
-      if (!args.dryRun) {
-        const key = `${sid}.jpg`;
-        try {
-          if (!(await objectExists(r2, { bucket: R2_BUCKET, key }))) {
-            const imgRes = await fetch(item.image);
-            if (imgRes.ok) {
-              const buf = Buffer.from(await imgRes.arrayBuffer());
-              await uploadImageToR2(r2, { bucket: R2_BUCKET, sourceId: sid, buffer: buf });
-              uploaded++;
-            } else {
-              console.warn(`  image ${sid}: HTTP ${imgRes.status}`);
-            }
-          }
-        } catch (e) {
-          console.warn(`  image ${sid}: ${e.message}`);
-        }
-      }
-
-      newRows.push(row);
-      if (newRows.length >= LIMIT) break;
-    }
-
-    // Incremental persist so a crash mid-crawl doesn't lose uploaded work
-    if (typeof args.flush === 'function' && newRows.length > flushedCount) {
-      await args.flush(newRows.slice(flushedCount));
-      flushedCount = newRows.length;
-    }
-
-    // Stop condition: if all items on this page were already seen (skipped in --full mode)
-    if (newOnPage === 0 && !args.full) {
-      emptyPages++;
-      if (sort === 'newest' && emptyPages >= 1) {
-        // For 'newest', any fully-seen page means we've caught up
-        console.log(`\n  ✅ All items on page seen — caught up (newest mode)`);
+  try {
+    let reachedEnd = false;
+    while (newRows.length < LIMIT && !reachedEnd) {
+      let bodies;
+      try {
+        bodies = await withBackoff(
+          () => fetchBatch(offset),
+          { maxAttempts: 3, baseMs: 1000 }
+        );
+      } catch (e) {
+        const msg = `offset=${offset} sort=${sort}: ${e.message}`;
+        console.warn(`  ⚠ ${msg}`);
+        errors.push(msg);
         break;
       }
-      if (emptyPages >= EMPTY_PAGES_BEFORE_STOP) {
-        console.log(`\n  ✅ ${EMPTY_PAGES_BEFORE_STOP} consecutive all-seen pages — stopping sort`);
-        break;
+
+      const pendingUploads = [];
+
+      for (let bIdx = 0; bIdx < bodies.length; bIdx++) {
+        const body = bodies[bIdx];
+        const pageOffset = offset + bIdx * 20;
+        const items = body?.images || [];
+        if (items.length === 0) {
+          reachedEnd = true;
+          break;
+        }
+
+        let newOnPage = 0;
+        for (const item of items) {
+          const sid = String(item.id || '');
+          if (!sid || seen.has(sid)) continue;
+
+          // Only ingest items with a ready, non-empty prompt directly
+          const hasPrompt = item.promptReady === true &&
+            typeof item.prompt === 'string' &&
+            item.prompt.trim().length > 0;
+          if (!hasPrompt) continue;
+
+          seen.add(sid);
+          newOnPage++;
+          const id = nextId();
+          const { row, unmapped } = mapItemToRow(item, { id, r2PublicUrl: R2_PUBLIC_URL });
+          if (unmapped) unmappedModels.add(item.model || '(empty)');
+
+          pendingUploads.push(uploadItemImage(sid, item.image));
+          newRows.push(row);
+          if (newRows.length >= LIMIT) break;
+        }
+
+        if (newOnPage === 0 && !args.full) {
+          emptyPages++;
+          if (emptyPages >= EMPTY_PAGES_BEFORE_STOP) {
+            console.log(`\n  ✅ ${EMPTY_PAGES_BEFORE_STOP} consecutive all-seen pages at offset=${pageOffset} — stopping sort`);
+            reachedEnd = true;
+            break;
+          }
+        } else {
+          emptyPages = 0;
+        }
+
+        if (!body.hasMore) {
+          console.log(`\n  ✅ API reports hasMore=false at offset=${pageOffset} — end of results`);
+          reachedEnd = true;
+          break;
+        }
+
+        if (newRows.length >= LIMIT) break;
       }
-    } else {
-      emptyPages = 0;
-    }
 
-    if (!body.hasMore) {
-      console.log(`\n  ✅ API reports hasMore=false — end of results`);
-      break;
-    }
+      // Await all R2 uploads for this 5-page batch in parallel
+      if (pendingUploads.length > 0) {
+        const results = await Promise.all(pendingUploads);
+        uploaded += results.filter(Boolean).length;
+      }
 
-    process.stdout.write(
-      `\r  scanned offset=${offset + 20}, new=${newRows.length}, fallback=${fallbackUsed}, uploaded=${uploaded}    `
-    );
-    offset += 20;
-    await SLEEP(SLEEP_MS);
+      // Incremental persist so a crash mid-crawl doesn't lose uploaded work
+      if (typeof args.flush === 'function' && newRows.length > flushedCount) {
+        await args.flush(newRows.slice(flushedCount));
+        flushedCount = newRows.length;
+      }
+
+      offset += PAGES_PER_BATCH * 20;
+      process.stdout.write(
+        `\r  scanned offset=${offset}, new=${newRows.length}, uploaded=${uploaded}    `
+      );
+    }
+  } finally {
+    if (sharedCtx) {
+      try { await sharedCtx.close(); } catch {}
+    }
   }
 
   if (unmappedModels.size) {
@@ -548,17 +564,20 @@ export async function main() {
   const allErrors   = [];
   let inserted      = 0;
 
-  // Upsert rows to Supabase as each page is processed (not in dry-run)
+  // Upsert rows to Supabase as each batch is processed (not in dry-run)
   const upsertRows = async (rows) => {
     const BATCH = 100;
     for (let i = 0; i < rows.length; i += BATCH) {
       const batch = rows.slice(i, i + BATCH);
-      const { error } = await supabase.from('prompts').upsert(batch, { onConflict: 'source_id' });
-      if (error) {
-        console.warn(`\n  ⚠ upsert: ${error.message}`);
-        allErrors.push(`upsert: ${error.message}`);
-      } else {
+      try {
+        await withBackoff(async () => {
+          const { error } = await supabase.from('prompts').upsert(batch, { onConflict: 'source_id' });
+          if (error) throw new Error(error.message);
+        }, { maxAttempts: 3, baseMs: 1000 });
         inserted += batch.length;
+      } catch (e) {
+        console.warn(`\n  ⚠ upsert: ${e.message}`);
+        allErrors.push(`upsert: ${e.message}`);
       }
     }
   };
