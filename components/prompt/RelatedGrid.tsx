@@ -9,10 +9,15 @@ export function RelatedGrid({ prompts }: { prompts: Prompt[] }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[11px] font-semibold text-[#71717a] uppercase tracking-wider">
+        <h2
+          className="text-[11px] font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--fg-subtle)' }}
+        >
           More like this
         </h2>
-        <span className="text-[11px] text-[#52525b]">{prompts.length} similar</span>
+        <span className="text-[11px]" style={{ color: 'var(--fg-subtle)' }}>
+          {prompts.length} similar
+        </span>
       </div>
 
       <div className="columns-3 gap-2">
@@ -22,7 +27,8 @@ export function RelatedGrid({ prompts }: { prompts: Prompt[] }) {
             <Link
               key={p.id}
               href={`/prompt/${p.id}`}
-              className="group block break-inside-avoid mb-2 rounded-[10px] overflow-hidden border border-white/[0.07] hover:border-white/25 transition-all"
+              className="group block break-inside-avoid mb-2 rounded-xl overflow-hidden transition-all"
+              style={{ border: '1px solid var(--border-default)' }}
               title={p.promptText.slice(0, 80)}
             >
               <div className="relative w-full overflow-hidden" style={{ paddingBottom: pb }}>

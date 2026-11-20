@@ -9,7 +9,10 @@ const LINKS = [
 export function MoreFromUs() {
   return (
     <div className="px-2">
-      <p className="px-3 py-1 text-[11px] font-semibold text-[#9ca3af] uppercase tracking-wider">
+      <p
+        className="px-3 py-1 text-[11px] font-semibold uppercase tracking-wider"
+        style={{ color: 'var(--fg-subtle)' }}
+      >
         More from us
       </p>
       <ul className="flex flex-col gap-0.5">
@@ -19,12 +22,14 @@ export function MoreFromUs() {
               href={href}
               target="_blank"
               rel="noopener noreferrer"
-              className="group flex items-center gap-3 px-3 py-2 rounded-[10px] text-sm text-[#1b1b1b] hover:bg-[#f7f4ed] transition-colors"
+              className="group flex items-center gap-3 px-3 py-2 rounded-[10px] text-sm transition-colors theme-surface-hover"
+              style={{ color: 'var(--fg-secondary)' }}
             >
               <span className="flex-1">{label}</span>
               <ExternalLink
                 size={13}
-                className="text-[#9ca3af] opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-150"
+                className="opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-150"
+                style={{ color: 'var(--fg-subtle)' }}
               />
             </a>
           </li>

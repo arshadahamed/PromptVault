@@ -5,7 +5,7 @@ import { GalleryClient } from './GalleryClient';
 
 export const revalidate = 60;
 
-const PAGE_SIZE = 48;
+const PAGE_SIZE = 24;
 
 export default async function Home() {
   const [dbPrompts, tabCounts, settings] = await Promise.all([

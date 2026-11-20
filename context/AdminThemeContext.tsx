@@ -1,5 +1,5 @@
 'use client';
-import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useSyncExternalStore } from 'react';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type ResolvedTheme = 'dark' | 'light';
@@ -8,15 +8,17 @@ interface ThemeContextValue {
   mode: ThemeMode;
   resolved: ResolvedTheme;
   setMode: (m: ThemeMode) => void;
+  toggleTheme: () => void;
 }
 
 const STORAGE_KEY = 'admin-theme';
+const PUBLIC_STORAGE_KEY = 'mg-theme';
 const THEME_EVENT = 'admin-theme-change';
 
 function subscribeMode(callback: () => void): () => void {
   if (typeof window === 'undefined') return () => {};
   const onStorage = (e: StorageEvent) => {
-    if (e.key === null || e.key === STORAGE_KEY) callback();
+    if (e.key === null || e.key === STORAGE_KEY || e.key === PUBLIC_STORAGE_KEY) callback();
   };
   window.addEventListener('storage', onStorage);
   window.addEventListener(THEME_EVENT, callback);
@@ -28,7 +30,9 @@ function subscribeMode(callback: () => void): () => void {
 
 function getModeSnapshot(): ThemeMode {
   if (typeof window === 'undefined') return 'dark';
-  const stored = window.localStorage.getItem(STORAGE_KEY);
+  const stored =
+    window.localStorage.getItem(PUBLIC_STORAGE_KEY) ||
+    window.localStorage.getItem(STORAGE_KEY);
   if (stored === 'light' || stored === 'dark' || stored === 'system') return stored;
   return 'dark';
 }
@@ -57,6 +61,7 @@ const AdminThemeCtx = createContext<ThemeContextValue>({
   mode: 'dark',
   resolved: 'dark',
   setMode: () => {},
+  toggleTheme: () => {},
 });
 
 export function AdminThemeProvider({ children }: { children: React.ReactNode }) {
@@ -69,22 +74,44 @@ export function AdminThemeProvider({ children }: { children: React.ReactNode }) 
 
   const resolved: ResolvedTheme = mode === 'system' ? (systemDark ? 'dark' : 'light') : mode;
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const root = document.documentElement;
+    root.setAttribute('data-theme', resolved);
+    root.style.colorScheme = resolved;
+    if (resolved === 'dark') {
+      root.classList.add('dark');
+      root.classList.remove('light');
+    } else {
+      root.classList.add('light');
+      root.classList.remove('dark');
+    }
+  }, [resolved]);
+
   const setMode = useCallback((next: ThemeMode) => {
     if (typeof window === 'undefined') return;
     window.localStorage.setItem(STORAGE_KEY, next);
+    window.localStorage.setItem(PUBLIC_STORAGE_KEY, next);
     window.dispatchEvent(new Event(THEME_EVENT));
   }, []);
 
+  const toggleTheme = useCallback(() => {
+    const next: ThemeMode = resolved === 'dark' ? 'light' : 'dark';
+    setMode(next);
+  }, [resolved, setMode]);
+
   return (
-    <AdminThemeCtx.Provider value={{ mode, resolved, setMode }}>
-      <div className="admin-root" data-theme={resolved}>
+    <AdminThemeCtx.Provider value={{ mode, resolved, setMode, toggleTheme }}>
+      <div className="admin-root app-theme-root" data-theme={resolved}>
         {children}
       </div>
     </AdminThemeCtx.Provider>
   );
 }
 
+export const ThemeProvider = AdminThemeProvider;
 export const useAdminTheme = () => useContext(AdminThemeCtx);
+export const useTheme = () => useContext(AdminThemeCtx);
 
 export interface ThemeTokens {
   bg: string;

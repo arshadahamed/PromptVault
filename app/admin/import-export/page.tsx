@@ -12,6 +12,7 @@ import {
 } from '@/components/admin/ui/Primitives';
 import { ConfirmDialog, Dialog } from '@/components/admin/ui/Dialog';
 import { useToast } from '@/components/admin/ui/ToastProvider';
+import { LottieIcon } from '@/components/ui/LottieIcon';
 
 interface ParsedPromptRow {
   id?: string;
@@ -350,7 +351,7 @@ export default function ImportExportPage() {
                 color: preview ? 'var(--adm-accent-text)' : 'var(--adm-text-muted)',
               }}
             >
-              <FileJson size={20} />
+              <LottieIcon name="upload" size={20} />
             </div>
 
             {preview ? (

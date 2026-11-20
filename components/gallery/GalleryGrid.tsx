@@ -10,8 +10,10 @@ interface Props {
   className?: string;
 }
 
-// First 6 cards are immediately visible above the fold — prioritize LCP
-const EAGER_THRESHOLD = 6;
+// First 12 cards are above the fold on desktop 4-column layouts — load eagerly
+const EAGER_THRESHOLD = 12;
+// First 4 cards get fetchPriority="high" for instant LCP
+const HIGH_PRIORITY_THRESHOLD = 4;
 
 export function GalleryGrid({
   pages,
@@ -38,6 +40,7 @@ export function GalleryGrid({
               key={p.id}
               prompt={p}
               eager={pageIndex === 0 && i < EAGER_THRESHOLD}
+              highPriority={pageIndex === 0 && i < HIGH_PRIORITY_THRESHOLD}
             />
           ))}
         </div>

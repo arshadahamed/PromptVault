@@ -45,8 +45,16 @@ const _fetchSettings = unstable_cache(
   { revalidate: 3600, tags: ['settings'] }
 );
 
+let memSettings: { value: SiteSettings; expiresAt: number } | null = null;
+const SETTINGS_MEM_TTL = 300_000; // 5 minutes in-RAM cache
+
 export async function getSettings(): Promise<SiteSettings> {
-  return _fetchSettings();
+  if (memSettings && Date.now() < memSettings.expiresAt) {
+    return memSettings.value;
+  }
+  const s = await _fetchSettings();
+  memSettings = { value: s, expiresAt: Date.now() + SETTINGS_MEM_TTL };
+  return s;
 }
 
 export async function saveSettings(patch: Partial<SiteSettings>): Promise<SiteSettings> {
@@ -55,6 +63,7 @@ export async function saveSettings(patch: Partial<SiteSettings>): Promise<SiteSe
   await supabase
     .from('settings')
     .upsert({ id: 1, data: updated, updated_at: updated.updatedAt });
+  memSettings = { value: updated, expiresAt: Date.now() + SETTINGS_MEM_TTL };
   return updated;
 }
 

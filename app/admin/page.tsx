@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import {
-  Images, Tag, Plus, ArrowRight, Star, Eye, EyeOff, Heart, RefreshCw,
+  Images, Tag, Plus, ArrowRight, Eye, EyeOff, Heart, RefreshCw,
   BarChart3, Sparkles, ArrowLeftRight, Settings, CheckCircle2, Flame, Clock,
 } from 'lucide-react';
 import type { AdminDashboardStats, DbPrompt } from '@/lib/db';
@@ -11,6 +11,7 @@ import {
   AdminPageHeader, AdminSectionHeader,
 } from '@/components/admin/ui/Primitives';
 import { useToast } from '@/components/admin/ui/ToastProvider';
+import { LottieIcon } from '@/components/ui/LottieIcon';
 
 const MODEL_COLORS: Record<string, string> = {
   ChatGPT: '#10b981',
@@ -137,7 +138,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <KpiCard
           href="/admin/prompts"
-          icon={<Images size={17} />}
+          icon={<LottieIcon name="layers" size={18} />}
           label="Total Prompts"
           value={stats ? stats.totalPrompts.toLocaleString() : null}
           sub={
@@ -149,7 +150,7 @@ export default function AdminDashboard() {
         />
         <KpiCard
           href="/admin/prompts?status=featured"
-          icon={<Star size={17} />}
+          icon={<LottieIcon name="sparkles" size={18} />}
           label="Featured"
           value={stats ? stats.featuredCount.toLocaleString() : null}
           sub={stats ? `${featuredPct}% pinned to gallery top` : 'Loading…'}
@@ -165,7 +166,7 @@ export default function AdminDashboard() {
         />
         <KpiCard
           href="/admin/prompts?sort=likes"
-          icon={<Heart size={17} />}
+          icon={<LottieIcon name="heart" size={18} />}
           label="Total Engagement"
           value={stats ? stats.totalLikes.toLocaleString() : null}
           sub={stats ? `${stats.totalViews.toLocaleString()} total views` : 'Loading…'}

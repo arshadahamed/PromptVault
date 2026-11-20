@@ -1,10 +1,12 @@
 'use client';
 import { useState } from 'react';
-import { Menu, X, Search, Sparkles } from 'lucide-react';
+import { Menu, X, Search } from 'lucide-react';
 import Link from 'next/link';
 import { Sidebar } from './Sidebar';
 import type { SiteSettings } from '@/lib/settings';
 import { useApp } from '@/context/AppContext';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { LottieIcon } from '@/components/ui/LottieIcon';
 
 interface Props {
   siteName: string;
@@ -19,43 +21,44 @@ export function MobileHeader({ siteName, settings, tabCounts }: Props) {
   return (
     <>
       <header
-        className="md:hidden fixed top-0 inset-x-0 z-30 flex items-center gap-2 px-3.5 h-14"
+        className="md:hidden fixed top-0 inset-x-0 z-30 flex items-center gap-2 px-3.5 h-14 transition-colors duration-200"
         style={{
-          background: 'rgba(9,9,11,0.88)',
+          backgroundColor: 'var(--bg-topbar)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid var(--border-default)',
         }}
       >
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="w-9 h-9 flex items-center justify-center rounded-[10px] text-[#a1a1aa] hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+          className="w-9 h-9 flex items-center justify-center rounded-xl transition-colors cursor-pointer theme-surface theme-surface-hover"
           aria-label="Open menu"
         >
-          <Menu size={19} />
+          <Menu size={18} />
         </button>
 
         <Link href="/" className="flex items-center gap-2 flex-1 min-w-0">
           {settings.logoImageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={settings.logoImageUrl}
               alt={siteName || 'PromptVault'}
-              width={26}
-              height={26}
-              className="w-[26px] h-[26px] rounded-[7px] object-contain shrink-0"
+              width={28}
+              height={28}
+              className="w-[28px] h-[28px] rounded-lg object-contain shrink-0"
             />
           ) : (
             <div
-              className="w-[26px] h-[26px] rounded-[7px] flex items-center justify-center shrink-0"
+              className="w-[28px] h-[28px] rounded-lg flex items-center justify-center shrink-0"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #06b6d4)' }}
             >
-              <Sparkles size={13} className="text-white" />
+              <LottieIcon name="sparkles" size={16} primaryColor="#ffffff" secondaryColor="#a5f3fc" />
             </div>
           )}
           <span
-            className="text-[14px] font-bold text-white truncate"
-            style={{ fontFamily: 'var(--font-poppins)' }}
+            className="text-[14px] font-bold truncate"
+            style={{ fontFamily: 'var(--font-poppins)', color: 'var(--fg-primary)' }}
           >
             {siteName || 'PromptVault'}
           </span>
@@ -65,15 +68,17 @@ export function MobileHeader({ siteName, settings, tabCounts }: Props) {
           type="button"
           onClick={() => openModal('search')}
           aria-label="Search prompts"
-          className="w-9 h-9 flex items-center justify-center rounded-[10px] text-[#a1a1aa] hover:text-white bg-white/[0.04] border border-white/[0.08] cursor-pointer"
+          className="w-9 h-9 flex items-center justify-center rounded-xl cursor-pointer theme-surface theme-surface-hover"
         >
-          <Search size={16} />
+          <Search size={15} />
         </button>
+
+        <ThemeToggle variant="icon" />
 
         {isAdmin ? (
           <Link
             href="/admin"
-            className="flex items-center px-3 h-8 rounded-full text-[11px] font-semibold text-white"
+            className="flex items-center px-3 h-8 rounded-full text-[11px] font-semibold text-white shrink-0"
             style={{ background: 'linear-gradient(135deg, #7c3aed, #06b6d4)' }}
           >
             Admin
@@ -81,7 +86,7 @@ export function MobileHeader({ siteName, settings, tabCounts }: Props) {
         ) : (
           <Link
             href="/login"
-            className="flex items-center px-3 h-8 rounded-full text-[11px] font-semibold text-[#e4e4e7] bg-white/[0.05] border border-white/[0.09]"
+            className="flex items-center px-3 h-8 rounded-full text-[11px] font-semibold shrink-0 theme-surface theme-surface-hover"
           >
             Login
           </Link>
@@ -91,10 +96,10 @@ export function MobileHeader({ siteName, settings, tabCounts }: Props) {
       {open && (
         <>
           <div
-            className="md:hidden fixed inset-0 z-40 bg-black/70 backdrop-blur-sm"
+            className="md:hidden fixed inset-0 z-40 bg-black/65 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <div className="md:hidden fixed inset-y-0 left-0 z-50 w-[260px] shadow-2xl">
+          <div className="md:hidden fixed inset-y-0 left-0 z-50 w-[268px] shadow-2xl">
             <Sidebar
               settings={settings}
               tabCounts={tabCounts}
@@ -103,7 +108,7 @@ export function MobileHeader({ siteName, settings, tabCounts }: Props) {
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="absolute top-3.5 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.08] text-[#a1a1aa] hover:text-white cursor-pointer"
+              className="absolute top-3.5 right-3 w-8 h-8 flex items-center justify-center rounded-full cursor-pointer theme-surface"
               aria-label="Close menu"
             >
               <X size={15} />

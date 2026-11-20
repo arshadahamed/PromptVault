@@ -1,8 +1,7 @@
-import { readFileSync, readdirSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const root  = join(__dir, '..');
@@ -26,15 +25,6 @@ for (const k of required) {
 }
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-const r2 = new S3Client({
-  region: 'auto',
-  endpoint: `https://${process.env.CLOUDFLARE_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-  credentials: {
-    accessKeyId:     process.env.R2_ACCESS_KEY_ID,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-  },
-});
-const R2_BUCKET     = process.env.R2_BUCKET_NAME;
 const R2_PUBLIC_URL = process.env.R2_PUBLIC_URL.replace(/\/$/, '');
 
 // Read local data

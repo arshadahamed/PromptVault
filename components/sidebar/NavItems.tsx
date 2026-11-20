@@ -1,13 +1,13 @@
 'use client';
-import { Home, Search, History, Heart, type LucideIcon } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { type ModalId } from '@/hooks/useModal';
 import { usePathname } from 'next/navigation';
+import { LottieIcon, type LottieIconName } from '@/components/ui/LottieIcon';
 
 interface NavItem {
   id: string;
   label: string;
-  icon: LucideIcon;
+  lottie: LottieIconName;
   href?: string;
   modal?: ModalId;
   shortcut?: string;
@@ -15,10 +15,10 @@ interface NavItem {
 }
 
 const items: NavItem[] = [
-  { id: 'home',      label: 'Explore',   icon: Home,    href: '/',          color: '#a855f7' },
-  { id: 'search',    label: 'Search',    icon: Search,  modal: 'search',    shortcut: '⌘K', color: '#22d3ee' },
-  { id: 'history',   label: 'History',   icon: History, modal: 'history',   color: '#f59e0b' },
-  { id: 'favorites', label: 'Favorites', icon: Heart,   modal: 'favorites', color: '#ec4899' },
+  { id: 'home',      label: 'Explore Studio', lottie: 'sparkles', href: '/',          color: '#a855f7' },
+  { id: 'search',    label: 'Quick Search',   lottie: 'search',   modal: 'search',    shortcut: '⌘K', color: '#06b6d4' },
+  { id: 'history',   label: 'History',        lottie: 'clock',    modal: 'history',   color: '#f59e0b' },
+  { id: 'favorites', label: 'Saved Vault',    lottie: 'heart',    modal: 'favorites', color: '#ec4899' },
 ];
 
 export function NavItems({ onNavigate }: { onNavigate?: () => void }) {
@@ -27,8 +27,14 @@ export function NavItems({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav aria-label="Primary navigation">
+      <p
+        className="px-5 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em]"
+        style={{ color: 'var(--fg-subtle)' }}
+      >
+        Workspace
+      </p>
       <ul className="flex flex-col gap-1 px-2.5">
-        {items.map(({ id, label, icon: Icon, shortcut, href, modal, color }) => {
+        {items.map(({ id, label, lottie, shortcut, href, modal, color }) => {
           const active = href ? pathname === href : false;
           const count =
             id === 'favorites' ? favorites.length : id === 'history' ? history.length : 0;
@@ -42,42 +48,55 @@ export function NavItems({ onNavigate }: { onNavigate?: () => void }) {
                   else if (href === '/') setGalleryFilter({ tab: 'All', sort: 'Featured' });
                   onNavigate?.();
                 }}
-                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-[11px] text-[13px] font-medium transition-all duration-150 cursor-pointer group"
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all duration-150 cursor-pointer group"
                 style={
                   active
                     ? {
                         background:
-                          'linear-gradient(135deg, rgba(124,58,237,0.16), rgba(6,182,212,0.06))',
-                        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06)',
-                        border: '1px solid rgba(139,92,246,0.22)',
-                        color: '#ffffff',
+                          'linear-gradient(135deg, rgba(124,58,237,0.16), rgba(6,182,212,0.08))',
+                        border: '1px solid var(--accent-border)',
+                        color: 'var(--fg-primary)',
+                        boxShadow: 'var(--adm-shadow-sm)',
                       }
                     : {
-                        color: '#a1a1aa',
+                        color: 'var(--fg-muted)',
                         border: '1px solid transparent',
                       }
                 }
               >
-                <Icon
-                  size={16}
-                  strokeWidth={active ? 2.1 : 1.75}
-                  style={{ color: active ? color : undefined }}
-                  className={!active ? 'group-hover:text-white transition-colors' : ''}
-                />
-                <span className={active ? 'font-semibold text-white' : 'group-hover:text-white transition-colors'}>
+                <span
+                  className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-105"
+                  style={{
+                    backgroundColor: active ? `${color}22` : 'var(--bg-muted)',
+                    border: `1px solid ${active ? `${color}44` : 'var(--border-default)'}`,
+                  }}
+                >
+                  <LottieIcon name={lottie} size={15} />
+                </span>
+                <span
+                  className={active ? 'font-semibold' : 'group-hover:opacity-100 transition-opacity'}
+                  style={{ color: active ? 'var(--fg-primary)' : undefined }}
+                >
                   {label}
                 </span>
 
                 {shortcut && (
-                  <kbd className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-[6px] bg-white/[0.06] text-[#a1a1aa] border border-white/[0.08]">
+                  <kbd
+                    className="ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-md"
+                    style={{
+                      backgroundColor: 'var(--bg-muted)',
+                      color: 'var(--fg-muted)',
+                      border: '1px solid var(--border-default)',
+                    }}
+                  >
                     {shortcut}
                   </kbd>
                 )}
 
                 {count > 0 && (
                   <span
-                    className="ml-auto text-[10px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums"
-                    style={{ background: `${color}22`, color }}
+                    className="ml-auto text-[10px] font-bold px-2 py-0.5 rounded-full tabular-nums"
+                    style={{ background: `${color}20`, color, border: `1px solid ${color}40` }}
                   >
                     {count}
                   </span>

@@ -4,11 +4,13 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, Images, Tag, LogOut, ExternalLink, Sun, Moon, Monitor,
-  Settings, ArrowLeftRight, Menu, X, Search, Plus, PanelLeftClose, PanelLeftOpen,
+  Settings, ArrowLeftRight, Menu, X, Plus, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
 import { useAdminTheme, type ThemeMode } from '@/context/AdminThemeContext';
 import { AdminCommandPalette } from './AdminCommandPalette';
 import { useToast } from './ui/ToastProvider';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
+import { LottieIcon } from '@/components/ui/LottieIcon';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -434,7 +436,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 color: 'var(--adm-text-muted)',
               }}
             >
-              <Search size={14} />
+              <LottieIcon name="search" size={15} />
               <span className="hidden sm:inline">Search prompts or jump…</span>
               <kbd
                 className="hidden lg:inline-flex items-center text-[10px] font-mono px-1.5 py-0.5 rounded"
@@ -447,6 +449,9 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
                 ⌘K
               </kbd>
             </button>
+
+            {/* Quick Light / Dark Mode Switcher in Top Header */}
+            <ThemeToggle variant="icon" />
 
             {pathname !== '/admin/prompts/new' && (
               <Link

@@ -3,14 +3,15 @@ import path from 'path';
 
 const isDev = process.env.NODE_ENV === 'development';
 
-// Strict Content-Security-Policy tuned for Next.js + Cloudflare R2 + translation fallback
+// Strict Content-Security-Policy tuned for Next.js + Cloudflare R2 + CDN UI/Lottie libraries + translation fallback
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
+  `script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://unpkg.com https://cdn.jsdelivr.net${isDev ? " 'unsafe-eval'" : ''}`,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
   "img-src 'self' data: blob: https:",
-  "font-src 'self' data:",
-  "connect-src 'self' https://translate.googleapis.com https://api.mymemory.translated.net https://*.r2.dev",
+  "font-src 'self' data: https://fonts.gstatic.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+  "connect-src 'self' https://translate.googleapis.com https://api.mymemory.translated.net https://*.r2.dev https://lottie.host https://*.lottiefiles.com https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+  "worker-src 'self' blob:",
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

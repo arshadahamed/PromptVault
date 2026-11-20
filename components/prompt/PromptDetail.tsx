@@ -12,7 +12,6 @@ import {
   Check,
   Languages,
   Loader2,
-  Sparkles,
   Eye,
   Calendar,
   Code2,
@@ -37,6 +36,8 @@ import {
   normalizeCodeLanguage,
 } from '@/lib/vibe-coding';
 import { RelatedGrid } from './RelatedGrid';
+import { LottieIcon } from '@/components/ui/LottieIcon';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 import { cn } from '@/lib/utils';
 
 type StageMode = 'photos' | 'code' | 'preview';
@@ -138,7 +139,6 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
     setTranslationError(null);
 
     try {
-      // Primary: Google Translate GTX endpoint (fast, accurate, zero key)
       const res = await fetch(
         `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(prompt.promptText)}`
       );
@@ -153,7 +153,6 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
         throw new Error('No translation returned');
       }
     } catch {
-      // Fallback: MyMemory API
       try {
         const fallbackRes = await fetch(
           `https://api.mymemory.translated.net/get?q=${encodeURIComponent(prompt.promptText.slice(0, 1000))}&langpair=autodetect|en`
@@ -275,21 +274,30 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
     : currentPromptText;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-[#f4f4f5] flex flex-col">
-      {/* Top sticky header bar */}
-      <header className="sticky top-0 z-20 flex items-center justify-between px-4 md:px-6 py-3 bg-[#09090b]/85 backdrop-blur-xl border-b border-white/[0.07] shrink-0">
+    <div
+      className="min-h-screen flex flex-col transition-colors duration-200"
+      style={{ backgroundColor: 'var(--bg-canvas)', color: 'var(--fg-primary)' }}
+    >
+      {/* Top sticky header bar (Theme-aware glass app bar) */}
+      <header
+        className="sticky top-0 z-20 flex items-center justify-between px-4 md:px-6 py-3 backdrop-blur-xl shrink-0 transition-colors duration-200"
+        style={{
+          backgroundColor: 'var(--bg-topbar)',
+          borderBottom: '1px solid var(--border-default)',
+        }}
+      >
         <div className="flex items-center gap-3 min-w-0">
           <button
             type="button"
             onClick={handleBack}
-            className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] flex items-center justify-center text-zinc-300 hover:text-white transition-colors cursor-pointer shrink-0"
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer shrink-0 theme-surface theme-surface-hover"
             aria-label="Back to gallery"
           >
             <ArrowLeft size={15} />
           </button>
 
           <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold text-white shrink-0 ring-1 ring-white/15"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-semibold text-white shrink-0"
             style={{ background: prompt.author.avatarColor }}
           >
             {prompt.author.initials}
@@ -297,20 +305,34 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
 
           <div className="min-w-0 leading-tight">
             <div className="flex items-center gap-2">
-              <p className="text-[13px] font-semibold text-white truncate">
+              <p className="text-[13px] font-semibold truncate" style={{ color: 'var(--fg-primary)' }}>
                 {prompt.title || prompt.author.name}
               </p>
-              <span className="hidden sm:inline-flex items-center text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/[0.06] text-zinc-300 border border-white/[0.08]">
+              <span
+                className="hidden sm:inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                style={{
+                  backgroundColor: 'var(--accent-soft)',
+                  color: 'var(--accent-text)',
+                  border: '1px solid var(--accent-border)',
+                }}
+              >
                 {prompt.tab || prompt.model}
               </span>
               {hasCode && (
-                <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-400/25">
-                  <Code2 size={10} />
+                <span
+                  className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{
+                    backgroundColor: 'var(--cyan-soft)',
+                    color: 'var(--cyan-text)',
+                    border: '1px solid var(--cyan-border)',
+                  }}
+                >
+                  <LottieIcon name="code" size={11} />
                   {langMeta?.label || normalizedLang.toUpperCase()}
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-[#71717a] truncate">
+            <p className="text-[11px] truncate" style={{ color: 'var(--fg-subtle)' }}>
               {prompt.title ? `${prompt.author.name} · ${prompt.author.handle}` : prompt.author.handle}
             </p>
           </div>
@@ -322,7 +344,12 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
               href={safePreviewUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="h-8 px-3 rounded-full bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/25 flex items-center gap-1.5 text-[12px] font-medium text-cyan-200 hover:text-white transition-colors"
+              className="h-8 px-3 rounded-full flex items-center gap-1.5 text-[12px] font-semibold transition-colors"
+              style={{
+                backgroundColor: 'var(--cyan-soft)',
+                border: '1px solid var(--cyan-border)',
+                color: 'var(--cyan-text)',
+              }}
             >
               <ExternalLink size={12.5} />
               <span className="hidden sm:inline">Live Demo</span>
@@ -332,7 +359,7 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
             <button
               type="button"
               onClick={downloadCode}
-              className="h-8 px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] flex items-center gap-1.5 text-[12px] font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer"
+              className="h-8 px-3 rounded-full flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer theme-surface theme-surface-hover"
               title="Download source code file"
             >
               <FileCode2 size={13} />
@@ -344,7 +371,7 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
               type="button"
               onClick={handleDownload}
               disabled={downloading}
-              className="h-8 px-3 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] flex items-center gap-1.5 text-[12px] font-medium text-zinc-300 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
+              className="h-8 px-3 rounded-full flex items-center gap-1.5 text-[12px] font-medium transition-colors cursor-pointer disabled:opacity-50 theme-surface theme-surface-hover"
               aria-label="Download image"
               title="Download active reference image"
             >
@@ -352,9 +379,13 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
               <span className="hidden sm:inline">Download</span>
             </button>
           )}
+
+          {/* Theme Toggle inside Prompt Studio Header */}
+          <ThemeToggle variant="icon" />
+
           <Link
             href="/"
-            className="w-8 h-8 rounded-full bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] flex items-center justify-center text-zinc-300 hover:text-white transition-colors"
+            className="w-8 h-8 rounded-full flex items-center justify-center transition-colors theme-surface theme-surface-hover"
             aria-label="Close"
           >
             <X size={15} />
@@ -365,7 +396,10 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
       {/* Two-column studio workspace */}
       <div className="flex flex-col md:flex-row flex-1 min-h-0">
         {/* LEFT: Artwork / Multi-Photo / Code / HTML Preview stage */}
-        <div className="relative flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-10 bg-[#070709] min-h-[340px] md:sticky md:top-[57px] md:h-[calc(100vh-57px)] overflow-hidden">
+        <div
+          className="relative flex-1 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-10 min-h-[340px] md:sticky md:top-[57px] md:h-[calc(100vh-57px)] overflow-hidden transition-colors duration-200"
+          style={{ backgroundColor: 'var(--bg-stage)' }}
+        >
           {/* Subtle ambient radial glow matching artwork */}
           <div
             className="pointer-events-none absolute inset-0 opacity-20 blur-3xl"
@@ -377,17 +411,29 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
           {/* Stage toolbar (shown for Vibe Coding, code snippets, or multi-photo galleries) */}
           {(hasCode || photos.length > 1 || isVibeCoding) && (
             <div className="relative z-10 w-full max-w-4xl flex flex-wrap items-center justify-between gap-2 mb-3">
-              <div className="inline-flex items-center p-1 rounded-xl bg-[#111116]/90 border border-white/[0.08] backdrop-blur-md">
+              <div
+                className="inline-flex items-center p-1 rounded-xl backdrop-blur-md"
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-default)',
+                  boxShadow: 'var(--adm-shadow-sm)',
+                }}
+              >
                 {(photos.length > 0 || !hasCode) && (
                   <button
                     type="button"
                     onClick={() => setStageMode('photos')}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer',
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer"
+                    style={
                       stageMode === 'photos'
-                        ? 'bg-white text-[#09090b] shadow-sm'
-                        : 'text-zinc-400 hover:text-white'
-                    )}
+                        ? {
+                            background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                            color: '#ffffff',
+                          }
+                        : {
+                            color: 'var(--fg-muted)',
+                          }
+                    }
                   >
                     <ImageIcon size={13} />
                     {photos.length > 1 ? `Photos (${photos.length})` : 'Preview'}
@@ -398,20 +444,26 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                   <button
                     type="button"
                     onClick={() => setStageMode('code')}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer',
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer"
+                    style={
                       stageMode === 'code'
-                        ? 'bg-cyan-400 text-[#09090b] shadow-sm font-semibold'
-                        : 'text-zinc-400 hover:text-white'
-                    )}
+                        ? {
+                            background: 'linear-gradient(135deg, #06b6d4, #4f46e5)',
+                            color: '#ffffff',
+                          }
+                        : {
+                            color: 'var(--fg-muted)',
+                          }
+                    }
                   >
                     <Code2 size={13} />
                     Code
                     <span
-                      className={cn(
-                        'text-[10px] px-1.5 py-0.2 rounded uppercase font-mono',
-                        stageMode === 'code' ? 'bg-black/15 text-[#09090b]' : 'bg-white/[0.07] text-zinc-300'
-                      )}
+                      className="text-[10px] px-1.5 py-0.2 rounded uppercase font-mono"
+                      style={{
+                        backgroundColor: stageMode === 'code' ? 'rgba(255,255,255,0.22)' : 'var(--bg-muted)',
+                        color: stageMode === 'code' ? '#ffffff' : 'var(--fg-secondary)',
+                      }}
                     >
                       {normalizedLang}
                     </span>
@@ -422,12 +474,17 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                   <button
                     type="button"
                     onClick={() => setStageMode('preview')}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors cursor-pointer',
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors cursor-pointer"
+                    style={
                       stageMode === 'preview'
-                        ? 'bg-emerald-400 text-[#09090b] shadow-sm font-semibold'
-                        : 'text-zinc-400 hover:text-white'
-                    )}
+                        ? {
+                            background: 'linear-gradient(135deg, #10b981, #059669)',
+                            color: '#ffffff',
+                          }
+                        : {
+                            color: 'var(--fg-muted)',
+                          }
+                    }
                   >
                     <Monitor size={13} />
                     Live HTML
@@ -440,14 +497,17 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                 {stageMode === 'photos' && safeImgUrl && (
                   <>
                     {photos.length > 1 && (
-                      <span className="text-[11px] font-medium text-zinc-400 bg-white/[0.04] border border-white/[0.08] px-2.5 py-1 rounded-lg tabular-nums">
+                      <span
+                        className="text-[11px] font-medium px-2.5 py-1 rounded-lg tabular-nums theme-surface"
+                        style={{ color: 'var(--fg-muted)' }}
+                      >
                         {clampedPhotoIdx + 1} / {photos.length}
                       </span>
                     )}
                     <button
                       type="button"
                       onClick={() => setPhotoFit((m) => (m === 'contain' ? 'cover' : 'contain'))}
-                      className="inline-flex items-center gap-1 text-[11px] font-medium text-zinc-300 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer theme-surface theme-surface-hover"
                       title={photoFit === 'contain' ? 'Switch to fill crop' : 'Fit full screenshot'}
                     >
                       {photoFit === 'contain' ? <Maximize2 size={12} /> : <Minimize2 size={12} />}
@@ -461,12 +521,11 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                     <button
                       type="button"
                       onClick={() => setWrapCode((w) => !w)}
-                      className={cn(
-                        'inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border transition-colors cursor-pointer',
-                        wrapCode
-                          ? 'bg-white/[0.12] border-white/[0.18] text-white'
-                          : 'bg-white/[0.04] border-white/[0.08] text-zinc-400 hover:text-white'
-                      )}
+                      className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer theme-surface"
+                      style={{
+                        borderColor: wrapCode ? 'var(--accent-primary)' : undefined,
+                        color: wrapCode ? 'var(--accent-text)' : 'var(--fg-muted)',
+                      }}
                     >
                       <WrapText size={12} />
                       Wrap
@@ -474,7 +533,10 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                     <button
                       type="button"
                       onClick={copyCode}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold bg-white text-[#09090b] hover:bg-zinc-200 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-white px-3 py-1.5 rounded-lg transition-opacity hover:opacity-95 cursor-pointer"
+                      style={{
+                        background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                      }}
                     >
                       {copiedCode ? <Check size={12} /> : <Copy size={12} />}
                       {copiedCode ? 'Copied Code!' : 'Copy Code'}
@@ -483,14 +545,22 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                 )}
 
                 {stageMode === 'preview' && canPreviewHtml && (
-                  <div className="inline-flex items-center p-0.5 rounded-lg bg-[#111116] border border-white/[0.08]">
+                  <div
+                    className="inline-flex items-center p-0.5 rounded-lg"
+                    style={{
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-default)',
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => setPreviewViewport('desktop')}
-                      className={cn(
-                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer',
-                        previewViewport === 'desktop' ? 'bg-white/[0.12] text-white' : 'text-zinc-400 hover:text-white'
-                      )}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+                      style={
+                        previewViewport === 'desktop'
+                          ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent-text)' }
+                          : { color: 'var(--fg-muted)' }
+                      }
                     >
                       <Monitor size={12} />
                       Desktop
@@ -498,10 +568,12 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                     <button
                       type="button"
                       onClick={() => setPreviewViewport('mobile')}
-                      className={cn(
-                        'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer',
-                        previewViewport === 'mobile' ? 'bg-white/[0.12] text-white' : 'text-zinc-400 hover:text-white'
-                      )}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer"
+                      style={
+                        previewViewport === 'mobile'
+                          ? { backgroundColor: 'var(--accent-soft)', color: 'var(--accent-text)' }
+                          : { color: 'var(--fg-muted)' }
+                      }
                     >
                       <Smartphone size={12} />
                       Mobile
@@ -514,8 +586,8 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
 
           {/* STAGE BODY */}
           {stageMode === 'code' && hasCode ? (
-            <div className="relative z-10 w-full max-w-4xl flex-1 min-h-0 max-h-[72vh] rounded-[16px] bg-[#0b0b10] border border-white/[0.1] shadow-[0_24px_80px_rgba(0,0,0,0.75)] flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-2.5 bg-[#121218] border-b border-white/[0.07] shrink-0">
+            <div className="relative z-10 w-full max-w-4xl flex-1 min-h-0 max-h-[72vh] rounded-2xl bg-[#0b0b10] border border-white/[0.12] shadow-2xl flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-2.5 bg-[#121218] border-b border-white/[0.08] shrink-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <FileCode2 size={14} className="text-cyan-400 shrink-0" />
                   <span className="text-[12px] font-mono text-zinc-200 truncate">
@@ -563,7 +635,7 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
           ) : stageMode === 'preview' && canPreviewHtml ? (
             <div
               className={cn(
-                'relative z-10 w-full flex-1 min-h-0 max-h-[74vh] rounded-[16px] bg-[#111116] border border-white/[0.1] shadow-[0_24px_80px_rgba(0,0,0,0.75)] flex flex-col overflow-hidden transition-[max-width] duration-200',
+                'relative z-10 w-full flex-1 min-h-0 max-h-[74vh] rounded-2xl bg-[#111116] border border-white/[0.12] shadow-2xl flex flex-col overflow-hidden transition-[max-width] duration-200',
                 previewViewport === 'mobile' ? 'max-w-[390px]' : 'max-w-4xl'
               )}
             >
@@ -591,7 +663,7 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
             <div className="relative z-10 w-full flex flex-col items-center">
               <div
                 className={cn(
-                  'relative rounded-[18px] overflow-hidden w-full border border-white/[0.1] shadow-[0_24px_80px_rgba(0,0,0,0.75)]',
+                  'relative rounded-2xl overflow-hidden w-full',
                   isVibeCoding || photos.length > 1 ? 'max-w-4xl' : ''
                 )}
                 style={
@@ -599,15 +671,19 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                     ? {
                         background:
                           photoFit === 'contain'
-                            ? '#0e0e13'
+                            ? 'var(--bg-card)'
                             : `linear-gradient(135deg, ${prompt.gradientFrom}, ${prompt.gradientTo})`,
                         height: photos.length > 1 ? 'min(60vh, 560px)' : 'min(68vh, 620px)',
+                        border: '1px solid var(--border-strong)',
+                        boxShadow: 'var(--shadow-elevated)',
                       }
                     : {
                         aspectRatio: safeRatio,
                         background: `linear-gradient(135deg, ${prompt.gradientFrom}, ${prompt.gradientTo})`,
                         maxWidth: '500px',
                         maxHeight: '76vh',
+                        border: '1px solid var(--border-strong)',
+                        boxShadow: 'var(--shadow-elevated)',
                       }
                 }
               >
@@ -640,7 +716,7 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                       <>
                         <Code2 size={28} className="text-white/80" />
                         <p className="text-[13px] font-medium text-white/90">
-                          Code & Prompt Package
+                          Code &amp; Prompt Package
                         </p>
                       </>
                     )}
@@ -680,11 +756,15 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                       type="button"
                       onClick={() => setActivePhotoIdx(idx)}
                       className={cn(
-                        'relative w-16 h-11 rounded-lg overflow-hidden border shrink-0 transition-all cursor-pointer bg-[#121218]',
+                        'relative w-16 h-11 rounded-lg overflow-hidden border shrink-0 transition-all cursor-pointer',
                         idx === clampedPhotoIdx
                           ? 'border-cyan-400 ring-2 ring-cyan-400/30 opacity-100'
-                          : 'border-white/[0.1] opacity-60 hover:opacity-95'
+                          : 'opacity-60 hover:opacity-95'
                       )}
+                      style={{
+                        backgroundColor: 'var(--bg-card)',
+                        borderColor: idx === clampedPhotoIdx ? '#22d3ee' : 'var(--border-default)',
+                      }}
                       aria-label={`View photo ${idx + 1}`}
                     >
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -697,14 +777,26 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
           )}
         </div>
 
-        {/* RIGHT: Inspector rail */}
-        <aside className="w-full md:w-[390px] lg:w-[420px] shrink-0 bg-[#0d0d11] border-t md:border-t-0 md:border-l border-white/[0.08] flex flex-col">
+        {/* RIGHT: Inspector rail (Theme-aware Light & Dark) */}
+        <aside
+          className="w-full md:w-[395px] lg:w-[425px] shrink-0 border-t md:border-t-0 md:border-l flex flex-col transition-colors duration-200"
+          style={{
+            backgroundColor: 'var(--bg-sidebar)',
+            borderColor: 'var(--border-default)',
+          }}
+        >
           <div className="flex-1 overflow-y-auto p-5 pb-24">
             {/* Optional Component / Design Title & Stack Tags */}
             {(prompt.title || stackTags.length > 0) && (
-              <div className="mb-4 pb-4 border-b border-white/[0.07]">
+              <div
+                className="mb-4 pb-4"
+                style={{ borderBottom: '1px solid var(--border-default)' }}
+              >
                 {prompt.title && (
-                  <h1 className="text-[17px] font-semibold text-white tracking-[-0.015em] leading-snug">
+                  <h1
+                    className="text-[17px] font-semibold tracking-[-0.015em] leading-snug"
+                    style={{ color: 'var(--fg-primary)' }}
+                  >
                     {prompt.title}
                   </h1>
                 )}
@@ -713,7 +805,12 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                     {stackTags.map((tag) => (
                       <span
                         key={tag}
-                        className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-cyan-500/10 text-cyan-300 border border-cyan-400/20"
+                        className="text-[11px] font-semibold px-2 py-0.5 rounded-md"
+                        style={{
+                          backgroundColor: 'var(--cyan-soft)',
+                          color: 'var(--cyan-text)',
+                          border: '1px solid var(--cyan-border)',
+                        }}
                       >
                         {tag}
                       </span>
@@ -728,12 +825,20 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
               <button
                 type="button"
                 onClick={() => toggleFavorite(prompt.id)}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-[13px] font-medium border transition-colors cursor-pointer',
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-colors cursor-pointer"
+                style={
                   liked
-                    ? 'bg-rose-500/15 border-rose-400/35 text-rose-300'
-                    : 'bg-white/[0.03] border-white/[0.08] text-zinc-300 hover:bg-white/[0.07] hover:text-white'
-                )}
+                    ? {
+                        backgroundColor: 'rgba(236, 72, 153, 0.14)',
+                        border: '1px solid rgba(236, 72, 153, 0.4)',
+                        color: '#ec4899',
+                      }
+                    : {
+                        backgroundColor: 'var(--bg-muted)',
+                        border: '1px solid var(--border-default)',
+                        color: 'var(--fg-secondary)',
+                      }
+                }
               >
                 <Heart size={14} fill={liked ? 'currentColor' : 'none'} strokeWidth={1.75} />
                 {(prompt.likes + (liked ? 1 : 0)).toLocaleString()}
@@ -742,9 +847,9 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
               <button
                 type="button"
                 onClick={handleShare}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-[13px] font-medium bg-white/[0.03] border border-white/[0.08] text-zinc-300 hover:bg-white/[0.07] hover:text-white transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-medium transition-colors cursor-pointer theme-surface theme-surface-hover"
               >
-                {shared ? <Check size={14} className="text-emerald-400" /> : <Share2 size={14} />}
+                {shared ? <Check size={14} className="text-emerald-500" /> : <Share2 size={14} />}
                 {shared ? 'Copied!' : 'Share'}
               </button>
 
@@ -752,7 +857,12 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                 <button
                   type="button"
                   onClick={copyCode}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-[10px] text-[13px] font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/30 text-cyan-200 transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-[13px] font-semibold transition-colors cursor-pointer"
+                  style={{
+                    backgroundColor: 'var(--cyan-soft)',
+                    border: '1px solid var(--cyan-border)',
+                    color: 'var(--cyan-text)',
+                  }}
                 >
                   {copiedCode ? <Check size={14} /> : <Code2 size={14} />}
                   {copiedCode ? 'Copied!' : 'Copy Code'}
@@ -762,7 +872,11 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
               <button
                 type="button"
                 onClick={copyPrompt}
-                className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-[13px] font-semibold bg-white text-[#09090b] hover:bg-zinc-200 transition-colors cursor-pointer shadow-sm"
+                className="ml-auto flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-semibold text-white transition-opacity hover:opacity-95 cursor-pointer shadow-sm"
+                style={{
+                  background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
+                  boxShadow: '0 4px 16px rgba(124, 58, 237, 0.3)',
+                }}
               >
                 {copied ? <Check size={14} /> : <Copy size={14} />}
                 {copied ? 'Copied!' : 'Copy Prompt'}
@@ -772,8 +886,12 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
             {/* Prompt inspector box */}
             <div className="mb-5">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-semibold text-[#71717a] uppercase tracking-wider">
-                  Prompt
+                <p
+                  className="text-[11px] font-semibold uppercase tracking-wider flex items-center gap-1.5"
+                  style={{ color: 'var(--fg-subtle)' }}
+                >
+                  <LottieIcon name="sparkles" size={13} />
+                  <span>Prompt Specification</span>
                 </p>
 
                 {(isNonEnglish || isTranslated) && (
@@ -781,16 +899,16 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                     type="button"
                     onClick={handleTranslateToggle}
                     disabled={isTranslating}
-                    className={cn(
-                      'flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors cursor-pointer border',
-                      isTranslated
-                        ? 'bg-amber-500/15 border-amber-400/30 text-amber-300 hover:bg-amber-500/20'
-                        : 'bg-indigo-500/15 border-indigo-400/30 text-indigo-300 hover:bg-indigo-500/20'
-                    )}
+                    className="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full transition-colors cursor-pointer"
+                    style={{
+                      backgroundColor: 'var(--accent-soft)',
+                      border: '1px solid var(--accent-border)',
+                      color: 'var(--accent-text)',
+                    }}
                     title={isTranslated ? 'Show original prompt' : 'Translate prompt to English'}
                   >
                     {isTranslating ? (
-                      <Loader2 size={12} className="animate-spin text-indigo-300" />
+                      <Loader2 size={12} className="animate-spin" />
                     ) : (
                       <Languages size={12} />
                     )}
@@ -803,20 +921,39 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                 )}
               </div>
 
-              <div className="bg-[#121218] rounded-[14px] p-4 border border-white/[0.08]">
-                <p className="text-[12.5px] text-zinc-200 leading-relaxed font-mono break-words whitespace-pre-wrap">
+              <div
+                className="rounded-2xl p-4"
+                style={{
+                  backgroundColor: 'var(--bg-muted)',
+                  border: '1px solid var(--border-default)',
+                }}
+              >
+                <p
+                  className="text-[12.5px] leading-relaxed font-mono break-words whitespace-pre-wrap"
+                  style={{ color: 'var(--fg-primary)' }}
+                >
                   {displayText}
                 </p>
 
-                <div className="mt-3 flex items-center justify-between flex-wrap gap-2 pt-2.5 border-t border-white/[0.06]">
+                <div
+                  className="mt-3 flex items-center justify-between flex-wrap gap-2 pt-2.5"
+                  style={{ borderTop: '1px solid var(--border-default)' }}
+                >
                   <div className="flex items-center gap-2">
                     {isTranslated && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-300 bg-emerald-500/15 border border-emerald-400/25 px-2 py-0.5 rounded-full">
-                        <Sparkles size={10} />
+                      <span
+                        className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                        style={{
+                          backgroundColor: 'var(--adm-success-bg)',
+                          color: 'var(--adm-success-text)',
+                          border: '1px solid var(--adm-success-border)',
+                        }}
+                      >
+                        <LottieIcon name="sparkles" size={10} />
                         Translated to English
                       </span>
                     )}
-                    <span className="text-[11px] text-[#52525b]">
+                    <span className="text-[11px] tabular-nums" style={{ color: 'var(--fg-subtle)' }}>
                       {currentPromptText.length} chars
                     </span>
                   </div>
@@ -825,7 +962,8 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                     <button
                       type="button"
                       onClick={() => setExpanded((v) => !v)}
-                      className="text-[12px] text-zinc-400 hover:text-white font-medium transition-colors cursor-pointer ml-auto"
+                      className="text-[12px] font-semibold transition-colors cursor-pointer ml-auto"
+                      style={{ color: 'var(--accent-text)' }}
                     >
                       {expanded ? 'Show less ↑' : 'Show more ↓'}
                     </button>
@@ -833,7 +971,7 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                 </div>
 
                 {translationError && (
-                  <p className="mt-2 text-[11px] text-rose-400 font-medium">
+                  <p className="mt-2 text-[11px] text-rose-500 font-medium">
                     {translationError}
                   </p>
                 )}
@@ -842,23 +980,51 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
 
             {/* Metadata pills */}
             <div className="flex flex-wrap items-center gap-2 mb-6 text-[11px]">
-              <span className="font-semibold bg-white/[0.06] text-zinc-200 px-2.5 py-1 rounded-full border border-white/[0.09]">
+              <span
+                className="font-semibold px-2.5 py-1 rounded-full"
+                style={{
+                  backgroundColor: 'var(--accent-soft)',
+                  color: 'var(--accent-text)',
+                  border: '1px solid var(--accent-border)',
+                }}
+              >
                 {prompt.model}
               </span>
               {prompt.category &&
                 prompt.category.toLowerCase() !== prompt.model.toLowerCase() && (
-                  <span className="capitalize bg-white/[0.04] text-zinc-300 px-2.5 py-1 rounded-full border border-white/[0.07]">
+                  <span
+                    className="capitalize px-2.5 py-1 rounded-full"
+                    style={{
+                      backgroundColor: 'var(--bg-muted)',
+                      color: 'var(--fg-secondary)',
+                      border: '1px solid var(--border-default)',
+                    }}
+                  >
                     {prompt.category}
                   </span>
                 )}
               {hasCode && (
-                <span className="inline-flex items-center gap-1 font-medium bg-cyan-500/10 text-cyan-300 px-2.5 py-1 rounded-full border border-cyan-400/20">
+                <span
+                  className="inline-flex items-center gap-1 font-semibold px-2.5 py-1 rounded-full"
+                  style={{
+                    backgroundColor: 'var(--cyan-soft)',
+                    color: 'var(--cyan-text)',
+                    border: '1px solid var(--cyan-border)',
+                  }}
+                >
                   <Code2 size={11} />
                   {langMeta?.label || normalizedLang.toUpperCase()}
                 </span>
               )}
               {photos.length > 1 && (
-                <span className="inline-flex items-center gap-1 bg-white/[0.04] text-zinc-300 px-2.5 py-1 rounded-full border border-white/[0.07]">
+                <span
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full"
+                  style={{
+                    backgroundColor: 'var(--bg-muted)',
+                    color: 'var(--fg-secondary)',
+                    border: '1px solid var(--border-default)',
+                  }}
+                >
                   <ImageIcon size={11} />
                   {photos.length} photos
                 </span>
@@ -868,22 +1034,28 @@ export function PromptDetail({ prompt, related }: { prompt: Prompt; related: Pro
                   href={safePreviewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 bg-white/[0.04] hover:bg-white/[0.08] text-zinc-200 px-2.5 py-1 rounded-full border border-white/[0.08] transition-colors"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full transition-colors theme-surface theme-surface-hover"
                 >
                   <ExternalLink size={11} />
                   Live Demo
                 </a>
               )}
               {prompt.views ? (
-                <span className="inline-flex items-center gap-1 text-zinc-400 px-2 py-1">
-                  <Eye size={12} className="text-[#71717a]" />
-                  <strong className="text-zinc-200 font-semibold">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-1"
+                  style={{ color: 'var(--fg-muted)' }}
+                >
+                  <Eye size={12} style={{ color: 'var(--fg-subtle)' }} />
+                  <strong className="font-semibold" style={{ color: 'var(--fg-primary)' }}>
                     {prompt.views.toLocaleString()}
                   </strong>
                 </span>
               ) : null}
               {prompt.createdAt && (
-                <span className="inline-flex items-center gap-1 text-[#71717a] px-2 py-1 ml-auto">
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-1 ml-auto"
+                  style={{ color: 'var(--fg-subtle)' }}
+                >
                   <Calendar size={11} />
                   {prompt.createdAt}
                 </span>

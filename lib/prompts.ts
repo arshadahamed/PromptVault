@@ -1,6 +1,6 @@
-import type { DbPrompt } from './db';
-import { isSafeHref } from './security';
-import type { Prompt } from './types';
+import type { DbPrompt } from './db.ts';
+import { isSafeHref } from './security.ts';
+import type { Prompt } from './types.ts';
 
 const AVATAR_COLORS = [
   '#6366f1', '#8b5cf6', '#ec4899', '#f59e0b',

@@ -19,7 +19,7 @@
  *   node scripts/scrape-meigen.mjs [--sort=newest|featured|popular|all] [--limit=N] [--dry-run]
  */
 
-import { readFileSync, existsSync, appendFileSync } from 'fs';
+import { readFileSync, appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createClient } from '@supabase/supabase-js';
@@ -29,7 +29,6 @@ import { chromium } from 'playwright';
 // ─── Module-level constants ──────────────────────────────────────────────────
 
 const SLEEP = (ms) => new Promise((r) => setTimeout(r, ms));
-const SLEEP_MS = 400;              // polite inter-page delay
 const EMPTY_PAGES_BEFORE_STOP = 3; // stop sort after N consecutive all-seen pages
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36';
 
@@ -295,7 +294,7 @@ export async function scrapePromptFallback(page, item) {
       return prompt;
     });
     return isPlausiblePrompt(raw) ? raw : '';
-  } catch (e) {
+  } catch {
     return ''; // non-fatal — caller will skip this item's prompt but still upload image
   }
 }

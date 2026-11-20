@@ -4,7 +4,7 @@
  * Usage: node scripts/auto-sync.mjs [--sort=newest|all]
  */
 
-import { appendFileSync, mkdirSync } from 'fs';
+import { appendFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { main } from './scrape-meigen.mjs';

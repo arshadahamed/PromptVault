@@ -1,15 +1,9 @@
 'use client';
-import { AdminThemeProvider, useAdminTheme, type ThemeMode } from '@/context/AdminThemeContext';
-import { Sun, Moon, Monitor } from 'lucide-react';
-
-const THEME_OPTS: { mode: ThemeMode; icon: typeof Sun; label: string }[] = [
-  { mode: 'light', icon: Sun, label: 'Light' },
-  { mode: 'dark', icon: Moon, label: 'Dark' },
-  { mode: 'system', icon: Monitor, label: 'System' },
-];
+import { AdminThemeProvider, useAdminTheme } from '@/context/AdminThemeContext';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
 function LoginLayoutInner({ children }: { children: React.ReactNode }) {
-  const { mode, resolved, setMode } = useAdminTheme();
+  const { resolved } = useAdminTheme();
   const dark = resolved === 'dark';
 
   return (
@@ -17,7 +11,7 @@ function LoginLayoutInner({ children }: { children: React.ReactNode }) {
       className="min-h-screen relative flex flex-col justify-center overflow-x-hidden transition-colors duration-300"
       style={{ backgroundColor: 'var(--adm-bg)' }}
     >
-      {/* Subtle enterprise grid + soft radial aura (no excessive motion) */}
+      {/* Subtle enterprise grid + soft radial aura */}
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 overflow-hidden"
@@ -41,37 +35,9 @@ function LoginLayoutInner({ children }: { children: React.ReactNode }) {
         />
       </div>
 
-      {/* Theme toggle */}
-      <div
-        role="group"
-        aria-label="Theme preference"
-        className="fixed top-4 right-4 z-40 flex items-center gap-0.5 p-1 rounded-xl"
-        style={{
-          backgroundColor: 'var(--adm-surface)',
-          border: '1px solid var(--adm-border)',
-          boxShadow: 'var(--adm-shadow-sm)',
-        }}
-      >
-        {THEME_OPTS.map(({ mode: m, icon: Icon, label }) => {
-          const active = mode === m;
-          return (
-            <button
-              key={m}
-              type="button"
-              onClick={() => setMode(m)}
-              aria-pressed={active}
-              aria-label={`${label} theme`}
-              title={`${label} theme`}
-              className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer"
-              style={{
-                backgroundColor: active ? 'var(--adm-accent-soft)' : 'transparent',
-                color: active ? 'var(--adm-accent-text)' : 'var(--adm-text-muted)',
-              }}
-            >
-              <Icon size={14} />
-            </button>
-          );
-        })}
+      {/* Top-right Lottie Theme Switcher */}
+      <div className="fixed top-4 right-4 z-40 w-56">
+        <ThemeToggle variant="segmented" />
       </div>
 
       <main className="relative z-10 w-full px-4 py-12">{children}</main>

@@ -3,7 +3,7 @@ import { getPromptsPaginated, getPromptCount, GALLERY_TABS } from '@/lib/db';
 import { toPrompt } from '@/lib/prompts';
 import { parsePositiveInt } from '@/lib/security';
 
-const LIMIT = 48;
+const LIMIT = 24;
 const ALLOWED_TABS = new Set<string>(GALLERY_TABS);
 const ALLOWED_SORTS = new Set<string>(['Featured', 'Newest', 'Popular']);
 

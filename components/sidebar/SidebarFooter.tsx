@@ -24,10 +24,11 @@ export function SidebarFooter({ settings }: Props) {
         <div className="flex items-center gap-1.5 flex-wrap">
           {footerLinks.map((link, i) => (
             <span key={link.label + i} className="flex items-center gap-1.5">
-              {i > 0 && <span className="text-[#3f3f46] text-xs">·</span>}
+              {i > 0 && <span style={{ color: 'var(--fg-subtle)' }} className="text-xs">·</span>}
               <a
                 href={safeHref(link.href)}
-                className="text-[11px] text-[#71717a] hover:text-white transition-colors"
+                className="text-[11px] hover:underline transition-colors"
+                style={{ color: 'var(--fg-subtle)' }}
               >
                 {link.label}
               </a>
@@ -38,7 +39,8 @@ export function SidebarFooter({ settings }: Props) {
               href={githubUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="ml-auto flex items-center gap-1 text-[11px] text-[#71717a] hover:text-white transition-colors"
+              className="ml-auto flex items-center gap-1 text-[11px] hover:underline transition-colors"
+              style={{ color: 'var(--fg-subtle)' }}
             >
               <Star size={11} fill="currentColor" />
               <span>Website</span>
@@ -48,18 +50,19 @@ export function SidebarFooter({ settings }: Props) {
       )}
 
       {settings.footerCopyright && (
-        <p className="text-[11px] leading-relaxed text-[#71717a]">
+        <p className="text-[11px] leading-relaxed" style={{ color: 'var(--fg-subtle)' }}>
           {settings.footerCopyright}
         </p>
       )}
 
-      <p className="text-[11px] text-[#71717a]">
+      <p className="text-[11px]" style={{ color: 'var(--fg-subtle)' }}>
         Built by{' '}
         <a
           href="https://arshadahamed.com/"
           target="_blank"
           rel="noopener noreferrer"
-          className="font-medium text-violet-400 hover:text-violet-300 hover:underline transition-colors"
+          className="font-semibold hover:underline transition-colors"
+          style={{ color: 'var(--accent-text)' }}
         >
           ArshaD
         </a>
@@ -69,10 +72,10 @@ export function SidebarFooter({ settings }: Props) {
         <>
           <Link
             href="/admin"
-            className="w-full flex items-center justify-center gap-2 h-10 rounded-[11px] text-[13px] font-semibold text-white transition-all hover:opacity-90"
+            className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-[13px] font-semibold text-white transition-all hover:opacity-90"
             style={{
               background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
-              boxShadow: '0 4px 20px rgba(124,58,237,0.3)',
+              boxShadow: '0 4px 20px rgba(124,58,237,0.32)',
             }}
           >
             <LayoutDashboard size={14} />
@@ -83,9 +86,9 @@ export function SidebarFooter({ settings }: Props) {
       ) : (
         <Link
           href="/login"
-          className="w-full flex items-center justify-center gap-2 h-10 rounded-[11px] text-[13px] font-medium text-[#e4e4e7] bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] transition-all"
+          className="w-full flex items-center justify-center gap-2 h-10 rounded-xl text-[13px] font-semibold transition-all theme-surface theme-surface-hover"
         >
-          <Lock size={13} className="text-[#a1a1aa]" />
+          <Lock size={13} style={{ color: 'var(--accent-text)' }} />
           Admin Login
         </Link>
       )}

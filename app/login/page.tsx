@@ -2,21 +2,26 @@
 import { Suspense, useEffect, useId, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Sparkles, Shield, Zap, ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, Lock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Eye, EyeOff, Loader2, Lock } from 'lucide-react';
+import { LottieIcon, type LottieIconName } from '@/components/ui/LottieIcon';
 
-const HIGHLIGHTS = [
+const HIGHLIGHTS: {
+  lottie: LottieIconName;
+  title: string;
+  description: string;
+}[] = [
   {
-    icon: Sparkles,
+    lottie: 'sparkles',
     title: 'Curated Prompt Studio',
     description: 'Create, feature, organize, and publish prompts across every supported AI model.',
   },
   {
-    icon: Shield,
+    lottie: 'shield',
     title: 'Hardened Access Control',
     description: 'HMAC-signed HTTP-only sessions with rate-limited authentication.',
   },
   {
-    icon: Zap,
+    lottie: 'rocket',
     title: 'Fast Bulk Workflows',
     description: 'Server-side filtering, bulk status controls, and JSON/CSV backup tools.',
   },
@@ -109,9 +114,7 @@ function LoginFormContent() {
               boxShadow: '0 8px 24px -4px rgba(124, 58, 237, 0.45)',
             }}
           >
-            <span className="text-white font-bold text-base">
-              {brand.logoText.slice(0, 2).toUpperCase()}
-            </span>
+            <LottieIcon name="sparkles" size={22} primaryColor="#ffffff" secondaryColor="#a5f3fc" />
           </div>
           <div>
             <p className="text-[17px] font-bold leading-tight" style={{ color: 'var(--adm-text)' }}>
@@ -135,17 +138,16 @@ function LoginFormContent() {
         </p>
 
         <div className="flex flex-col gap-5 mb-10">
-          {HIGHLIGHTS.map(({ icon: Icon, title, description }) => (
+          {HIGHLIGHTS.map(({ lottie, title, description }) => (
             <div key={title} className="flex items-start gap-3.5">
               <div
-                className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
                 style={{
                   backgroundColor: 'var(--adm-accent-soft)',
                   border: '1px solid var(--adm-accent-border)',
-                  color: 'var(--adm-accent-text)',
                 }}
               >
-                <Icon size={16} />
+                <LottieIcon name={lottie} size={18} />
               </div>
               <div>
                 <p className="text-[13.5px] font-semibold" style={{ color: 'var(--adm-text)' }}>
@@ -185,9 +187,7 @@ function LoginFormContent() {
               className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
               style={{ background: 'linear-gradient(135deg, #7c3aed, #4f46e5)' }}
             >
-              <span className="text-white font-bold text-xs">
-                {brand.logoText.slice(0, 2).toUpperCase()}
-              </span>
+              <LottieIcon name="sparkles" size={18} primaryColor="#ffffff" secondaryColor="#a5f3fc" />
             </div>
             <div>
               <p className="text-[14px] font-bold leading-tight" style={{ color: 'var(--adm-text)' }}>

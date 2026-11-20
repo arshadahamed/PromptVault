@@ -20,7 +20,7 @@ export function ModalShell({ title, subtitle, open, headerAction, children }: Pr
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 bg-black/70 backdrop-blur-[4px] z-50"
+            className="fixed inset-0 bg-black/65 backdrop-blur-[4px] z-50"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -32,25 +32,33 @@ export function ModalShell({ title, subtitle, open, headerAction, children }: Pr
             role="dialog"
             aria-modal="true"
             aria-label={title}
-            className="fixed top-0 right-0 h-full w-full max-w-[400px] z-50 flex flex-col shadow-2xl"
+            className="fixed top-0 right-0 h-full w-full max-w-[410px] z-50 flex flex-col shadow-2xl transition-colors duration-200"
             style={{
-              background: '#0d0d11',
-              borderLeft: '1px solid rgba(255,255,255,0.08)',
+              backgroundColor: 'var(--bg-sidebar)',
+              borderLeft: '1px solid var(--border-strong)',
+              color: 'var(--fg-primary)',
             }}
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 32, stiffness: 340 }}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.07] shrink-0">
+            <div
+              className="flex items-center justify-between px-5 py-4 shrink-0"
+              style={{ borderBottom: '1px solid var(--border-default)' }}
+            >
               <div>
                 <h2
-                  className="text-[15px] font-semibold text-white"
-                  style={{ fontFamily: 'var(--font-poppins)' }}
+                  className="text-[15px] font-semibold"
+                  style={{ fontFamily: 'var(--font-poppins)', color: 'var(--fg-primary)' }}
                 >
                   {title}
                 </h2>
-                {subtitle && <p className="text-[11px] text-[#71717a] mt-0.5">{subtitle}</p>}
+                {subtitle && (
+                  <p className="text-[11px] mt-0.5" style={{ color: 'var(--fg-subtle)' }}>
+                    {subtitle}
+                  </p>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -59,9 +67,9 @@ export function ModalShell({ title, subtitle, open, headerAction, children }: Pr
                   type="button"
                   onClick={closeModal}
                   aria-label="Close drawer"
-                  className="w-8 h-8 flex items-center justify-center rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                  className="w-8 h-8 flex items-center justify-center rounded-full transition-colors cursor-pointer theme-surface theme-surface-hover"
                 >
-                  <X size={16} />
+                  <X size={15} />
                 </button>
               </div>
             </div>

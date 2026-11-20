@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, memo } from 'react';
 import Link from 'next/link';
 import { Heart, Copy, Check, Code2, Images } from 'lucide-react';
 import { type Prompt } from '@/lib/types';
@@ -36,9 +36,9 @@ function ModelBadge({ model }: { model: string }) {
 
   return (
     <span
-      className="inline-flex items-center gap-1.5 max-w-full whitespace-nowrap truncate text-[10px] font-semibold tracking-wide px-2 py-0.5 rounded-full backdrop-blur-md shadow-sm"
+      className="inline-flex items-center gap-1.5 max-w-full whitespace-nowrap truncate text-[10px] font-semibold tracking-wide px-2.5 py-0.5 rounded-full shadow-sm"
       style={{
-        background: 'rgba(9, 9, 11, 0.74)',
+        background: 'rgba(9, 9, 11, 0.86)',
         color: style.color,
         border: `1px solid ${style.border}`,
       }}
@@ -52,7 +52,15 @@ function ModelBadge({ model }: { model: string }) {
   );
 }
 
-export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: boolean }) {
+export const PromptCard = memo(function PromptCard({
+  prompt,
+  eager = false,
+  highPriority = false,
+}: {
+  prompt: Prompt;
+  eager?: boolean;
+  highPriority?: boolean;
+}) {
   const { favorites, toggleFavorite } = useApp();
   const [copied, setCopied] = useState(false);
   const liked = favorites.includes(prompt.id);
@@ -77,10 +85,14 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
   };
 
   return (
-    <article className="break-inside-avoid mb-3">
+    <article
+      className="break-inside-avoid mb-3.5"
+      style={{ contain: 'layout style paint' }}
+    >
       <Link
         href={`/prompt/${prompt.id}`}
-        className="group block relative rounded-[16px] overflow-hidden cursor-pointer card-surface"
+        prefetch={false}
+        className="group block relative rounded-2xl overflow-hidden cursor-pointer card-surface"
       >
         <div className="relative w-full overflow-hidden" style={{ paddingBottom }}>
           {prompt.localImg ? (
@@ -91,27 +103,28 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
               gradientFrom={prompt.gradientFrom}
               gradientTo={prompt.gradientTo}
               eager={eager}
+              highPriority={highPriority}
             />
           ) : (
             <div
-              className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.03]"
+              className="absolute inset-0 transition-transform duration-300 group-hover:scale-[1.03]"
               style={{
                 background: `linear-gradient(135deg, ${prompt.gradientFrom}, ${prompt.gradientTo})`,
               }}
             />
           )}
 
-          {/* Top row: Model / Vibe Code badge + Quick Copy */}
+          {/* Top row: Model / Vibe Code badge + Quick Copy (no expensive backdrop-blur per card) */}
           <div className="absolute top-2.5 inset-x-2.5 z-10 flex items-center justify-between gap-1.5">
             <div className="flex items-center gap-1 min-w-0">
               <ModelBadge model={prompt.model} />
               {prompt.hasCode && (
                 <span
-                  className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full backdrop-blur-md shrink-0"
+                  className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full shrink-0"
                   style={{
-                    background: 'rgba(6, 182, 212, 0.2)',
+                    background: 'rgba(8, 51, 68, 0.9)',
                     color: '#a5f3fc',
-                    border: '1px solid rgba(34, 211, 238, 0.45)',
+                    border: '1px solid rgba(34, 211, 238, 0.5)',
                   }}
                 >
                   <Code2 size={10} />
@@ -120,11 +133,11 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
               )}
               {prompt.galleryImages && prompt.galleryImages.length > 0 && (
                 <span
-                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full backdrop-blur-md shrink-0"
+                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
                   style={{
-                    background: 'rgba(9, 9, 11, 0.72)',
+                    background: 'rgba(9, 9, 11, 0.86)',
                     color: '#e4e4e7',
-                    border: '1px solid rgba(255,255,255,0.16)',
+                    border: '1px solid rgba(255,255,255,0.18)',
                   }}
                 >
                   <Images size={9} />
@@ -137,19 +150,19 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
               type="button"
               onClick={handleCopy}
               aria-label="Copy prompt"
-              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-200 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer backdrop-blur-md shrink-0"
+              className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full cursor-pointer shrink-0"
               style={
                 copied
                   ? {
                       opacity: 1,
-                      background: 'rgba(16,185,129,0.9)',
+                      background: 'rgba(16,185,129,0.95)',
                       color: '#ffffff',
-                      border: '1px solid rgba(52,211,153,0.6)',
+                      border: '1px solid rgba(52,211,153,0.65)',
                     }
                   : {
-                      background: 'rgba(9,9,11,0.72)',
+                      background: 'rgba(9,9,11,0.88)',
                       color: '#f4f4f5',
-                      border: '1px solid rgba(255,255,255,0.16)',
+                      border: '1px solid rgba(255,255,255,0.2)',
                     }
               }
             >
@@ -162,12 +175,12 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
           <div
             className={
               prompt.title
-                ? 'absolute inset-0 pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity duration-300'
-                : 'absolute inset-0 pointer-events-none opacity-55 group-hover:opacity-100 transition-opacity duration-300'
+                ? 'absolute inset-0 pointer-events-none opacity-85 group-hover:opacity-100 transition-opacity duration-200'
+                : 'absolute inset-0 pointer-events-none opacity-55 group-hover:opacity-100 transition-opacity duration-200'
             }
             style={{
               background:
-                'linear-gradient(to top, rgba(9,9,11,0.92) 0%, rgba(9,9,11,0.35) 38%, transparent 65%)',
+                'linear-gradient(to top, rgba(9,9,11,0.92) 0%, rgba(9,9,11,0.32) 38%, transparent 65%)',
             }}
           />
 
@@ -178,18 +191,18 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
                 <p className="text-[12.5px] font-semibold text-white truncate drop-shadow-sm">
                   {prompt.title}
                 </p>
-                <p className="opacity-0 max-h-0 group-hover:opacity-100 group-hover:max-h-10 group-focus-within:opacity-100 group-focus-within:max-h-10 transition-all duration-200 text-[10.5px] leading-snug text-zinc-300 line-clamp-1 overflow-hidden mt-0.5">
+                <p className="opacity-0 max-h-0 group-hover:opacity-100 group-hover:max-h-10 group-focus-within:opacity-100 group-focus-within:max-h-10 transition-all duration-150 text-[10.5px] leading-snug text-zinc-200 line-clamp-1 overflow-hidden mt-0.5">
                   {prompt.promptText}
                 </p>
               </div>
             ) : (
-              <p className="opacity-0 translate-y-1.5 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-200 text-[11px] leading-snug text-zinc-200 line-clamp-2 pointer-events-none">
+              <p className="opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-150 text-[11px] leading-snug text-zinc-100 line-clamp-2 pointer-events-none">
                 {prompt.promptText}
               </p>
             )}
 
             <div className="flex items-center justify-between gap-2">
-              <span className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-200 text-[11px] text-zinc-400 truncate">
+              <span className="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity duration-150 text-[11px] text-zinc-300 truncate">
                 {prompt.author.handle}
               </span>
 
@@ -197,13 +210,13 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
                 type="button"
                 onClick={handleFavorite}
                 aria-label={liked ? 'Remove from favorites' : 'Add to favorites'}
-                className="ml-auto flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full transition-all cursor-pointer backdrop-blur-md"
+                className="ml-auto flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors cursor-pointer"
                 style={{
-                  background: liked ? 'rgba(236,72,153,0.28)' : 'rgba(9,9,11,0.65)',
-                  color: liked ? '#f9a8d4' : '#e4e4e7',
+                  background: liked ? 'rgba(131, 24, 67, 0.88)' : 'rgba(9,9,11,0.84)',
+                  color: liked ? '#fbcfe8' : '#e4e4e7',
                   border: liked
-                    ? '1px solid rgba(236,72,153,0.5)'
-                    : '1px solid rgba(255,255,255,0.14)',
+                    ? '1px solid rgba(236,72,153,0.6)'
+                    : '1px solid rgba(255,255,255,0.18)',
                 }}
               >
                 <Heart
@@ -220,4 +233,4 @@ export function PromptCard({ prompt, eager = false }: { prompt: Prompt; eager?: 
       </Link>
     </article>
   );
-}
+});

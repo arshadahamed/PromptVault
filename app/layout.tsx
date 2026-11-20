@@ -21,8 +21,10 @@ const poppins = Poppins({
 export const revalidate = 3600;
 
 export const viewport: Viewport = {
-  themeColor: '#09090b',
-  colorScheme: 'dark',
+  themeColor: [
+    { media: '(prefers-color-scheme: light)', color: '#f8fafc' },
+    { media: '(prefers-color-scheme: dark)', color: '#09090b' },
+  ],
   width: 'device-width',
   initialScale: 1,
 };
@@ -119,7 +121,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   };
 
   return (
-    <html lang="en" className={`${inter.variable} ${poppins.variable}`}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      data-scroll-behavior="smooth"
+      data-theme="dark"
+      className={`${inter.variable} ${poppins.variable}`}
+    >
       <head>
         {r2Origin && (
           <>
@@ -127,12 +135,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <link rel="dns-prefetch" href={r2Origin} />
           </>
         )}
+        <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap"
+        />
+      </head>
+      <body className="antialiased selection:bg-violet-500/30">
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }}
         />
-      </head>
-      <body className="antialiased selection:bg-violet-500/30 selection:text-white">
         {children}
       </body>
     </html>

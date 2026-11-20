@@ -1,16 +1,18 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { Search, Sparkles, ArrowUpRight, Flame, RotateCcw } from 'lucide-react';
+import { ArrowUpRight, RotateCcw, Megaphone } from 'lucide-react';
 import type { Prompt, Tab, Sort } from '@/lib/types';
 import type { SiteSettings } from '@/lib/settings';
 import { useApp } from '@/context/AppContext';
-import { TabBar } from '@/components/layout/TabBar';
+import { TabBar, type GridLayoutMode } from '@/components/layout/TabBar';
 import { GalleryGrid } from '@/components/gallery/GalleryGrid';
 import { BottomDock } from '@/components/layout/BottomDock';
 import { FifaPromoCard } from '@/components/layout/FifaPromoCard';
+import { LottieIcon } from '@/components/ui/LottieIcon';
+import { ThemeToggle } from '@/components/ui/ThemeToggle';
 
-const PAGE_SIZE = 48;
+const PAGE_SIZE = 24;
 
 interface Props {
   initialPrompts: Prompt[];
@@ -21,57 +23,112 @@ interface Props {
 
 function HeroHeader({
   total,
+  vibeCount,
+  activeTab,
   onSearch,
   onPopular,
+  onSelectTab,
 }: {
   total: number;
+  vibeCount: number;
+  activeTab: Tab;
   onSearch: () => void;
   onPopular: () => void;
+  onSelectTab: (tab: Tab) => void;
 }) {
   return (
     <section
       aria-label="Gallery introduction"
-      className="relative rounded-[20px] overflow-hidden mb-4 px-5 py-5 md:px-7 md:py-6"
+      className="relative rounded-2xl overflow-hidden mb-4 px-5 py-5 md:px-7 md:py-6 transition-colors duration-200"
       style={{
-        background:
-          'radial-gradient(120% 140% at 0% 0%, rgba(124,58,237,0.16) 0%, rgba(6,182,212,0.06) 45%, rgba(17,17,22,0.92) 100%)',
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.07), 0 12px 40px -16px rgba(0,0,0,0.6)',
+        backgroundColor: 'var(--bg-card)',
+        backgroundImage:
+          'radial-gradient(120% 140% at 0% 0%, rgba(124,58,237,0.14) 0%, rgba(6,182,212,0.07) 48%, transparent 100%)',
+        border: '1px solid var(--border-default)',
+        boxShadow: 'var(--shadow-card)',
       }}
     >
-      <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-        <div className="max-w-xl">
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-white/[0.05] border border-white/[0.08] mb-3">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-            <span className="text-[11px] font-semibold tracking-wide text-zinc-200 tabular-nums">
-              {total.toLocaleString()}+ Verified Prompts
+      {/* Top Row: Live Status Badge + Quick Stats + Theme Switcher */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-3.5" style={{ borderBottom: '1px solid var(--border-default)' }}>
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full"
+            style={{
+              backgroundColor: 'var(--accent-soft)',
+              border: '1px solid var(--accent-border)',
+            }}
+          >
+            <LottieIcon name="sparkles" size={15} />
+            <span
+              className="text-[11.5px] font-semibold tracking-wide tabular-nums"
+              style={{ color: 'var(--accent-text)' }}
+            >
+              {total.toLocaleString()}+ Verified AI Prompts
             </span>
           </div>
 
+          {vibeCount > 0 && (
+            <button
+              type="button"
+              onClick={() => onSelectTab('Vibe Coding')}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-transform hover:scale-[1.02] cursor-pointer"
+              style={{
+                backgroundColor: 'var(--cyan-soft)',
+                border: '1px solid var(--cyan-border)',
+                color: 'var(--cyan-text)',
+              }}
+            >
+              <LottieIcon name="code" size={14} />
+              <span>{vibeCount.toLocaleString()} Vibe Coding UI Kits</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2 ml-auto">
+          <ThemeToggle variant="pill" />
+        </div>
+      </div>
+
+      {/* Main Bento Grid: Headline Left + Command Search & Quick Chips Right */}
+      <div className="relative flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+        <div className="max-w-2xl">
           <h1
-            className="text-[22px] sm:text-[27px] font-bold text-white leading-[1.18] tracking-tight"
-            style={{ fontFamily: 'var(--font-poppins)' }}
+            className="text-[22px] sm:text-[28px] font-bold leading-[1.16] tracking-tight"
+            style={{ fontFamily: 'var(--font-poppins)', color: 'var(--fg-primary)' }}
           >
             Curated AI Prompts &amp;{' '}
-            <span className="gradient-text">Visual Inspiration</span>
+            <span className="gradient-text">Visual Inspiration Studio</span>
           </h1>
-          <p className="text-[13.5px] text-zinc-400 mt-1.5 leading-relaxed">
-            Copy production-ready prompts &amp; code for Vibe Coding websites, ChatGPT, Nanobanana, Midjourney, Flux &amp; Seedance in one click.
+          <p
+            className="text-[13.5px] mt-1.5 leading-relaxed"
+            style={{ color: 'var(--fg-muted)' }}
+          >
+            Copy production-ready prompts, live HTML/TSX components, and multi-shot references for Vibe Coding, ChatGPT, Nanobanana, Midjourney, Flux &amp; Seedance in one click.
           </p>
         </div>
 
-        {/* Right: Quick Command Search + Popular CTA */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 lg:min-w-[360px]">
+        {/* Right: Quick Command Search + Trending CTA with Lottie Icons */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 lg:min-w-[390px]">
           <button
             type="button"
             onClick={onSearch}
-            className="flex-1 flex items-center gap-2.5 h-11 px-3.5 rounded-[12px] bg-[#09090b]/75 hover:bg-[#09090b] border border-white/[0.1] hover:border-violet-400/40 text-left transition-all cursor-pointer group"
+            className="flex-1 flex items-center gap-2.5 h-11 px-3.5 rounded-xl text-left transition-all cursor-pointer group theme-surface theme-surface-hover"
           >
-            <Search size={15} className="text-zinc-400 group-hover:text-cyan-400 transition-colors shrink-0" />
-            <span className="text-[13px] text-zinc-400 group-hover:text-zinc-200 truncate flex-1">
+            <LottieIcon name="search" size={17} />
+            <span
+              className="text-[13px] truncate flex-1"
+              style={{ color: 'var(--fg-muted)' }}
+            >
               Search styles, models, keywords…
             </span>
-            <kbd className="hidden sm:inline-flex items-center text-[10px] font-mono px-1.5 py-0.5 rounded-[6px] bg-white/[0.06] text-zinc-400 border border-white/[0.08]">
+            <kbd
+              className="hidden sm:inline-flex items-center text-[10px] font-mono px-1.5 py-0.5 rounded-md"
+              style={{
+                backgroundColor: 'var(--bg-muted)',
+                color: 'var(--fg-muted)',
+                border: '1px solid var(--border-default)',
+              }}
+            >
               ⌘K
             </kbd>
           </button>
@@ -79,17 +136,51 @@ function HeroHeader({
           <button
             type="button"
             onClick={onPopular}
-            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-[12px] text-[13px] font-semibold text-white transition-all cursor-pointer hover:opacity-95 shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 h-11 px-4 rounded-xl text-[13px] font-semibold text-white transition-all cursor-pointer hover:opacity-95 shrink-0"
             style={{
               background: 'linear-gradient(135deg, #7c3aed, #4f46e5)',
               boxShadow: '0 6px 20px rgba(124,58,237,0.35), inset 0 1px 0 rgba(255,255,255,0.2)',
             }}
           >
-            <Flame size={14} />
+            <LottieIcon name="flame" size={16} primaryColor="#fde047" secondaryColor="#ffffff" />
             <span>Trending</span>
-            <ArrowUpRight size={13} className="opacity-80" />
+            <ArrowUpRight size={13} className="opacity-85" />
           </button>
         </div>
+      </div>
+
+      {/* Quick Model & Vibe Filter Chips (MUI / Ant Design Tag Bar) */}
+      <div className="mt-4 pt-3.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar" style={{ borderTop: '1px dashed var(--border-default)' }}>
+        <span className="text-[11px] font-semibold uppercase tracking-wider mr-1 shrink-0" style={{ color: 'var(--fg-subtle)' }}>
+          Quick Jump:
+        </span>
+        {(['All', 'Vibe Coding', 'ChatGPT', 'Midjourney', 'Nanobanana', 'Flux', 'Seedance'] as Tab[]).map((tab) => {
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => onSelectTab(tab)}
+              className="px-2.5 py-1 rounded-lg text-[11.5px] font-medium transition-all cursor-pointer whitespace-nowrap shrink-0"
+              style={
+                isActive
+                  ? {
+                      backgroundColor: 'var(--accent-soft)',
+                      color: 'var(--accent-text)',
+                      border: '1px solid var(--accent-border)',
+                      fontWeight: 600,
+                    }
+                  : {
+                      backgroundColor: 'var(--bg-muted)',
+                      color: 'var(--fg-muted)',
+                      border: '1px solid var(--border-default)',
+                    }
+              }
+            >
+              {tab}
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -105,11 +196,12 @@ interface GalleryFeedState {
 
 export function GalleryClient({ initialPrompts, initialTotal, tabCounts, settings }: Props) {
   const { activeTab, activeSort, setGalleryFilter, openModal } = useApp();
+  const [gridLayout, setGridLayout] = useState<GridLayoutMode>('masonry-responsive');
 
   const filterKey = `${activeTab}:${activeSort}`;
   const isDefaultFilter = activeTab === 'All' && activeSort === 'Featured';
 
-  const [feedState, setFeedState] = useState<GalleryFeedState | null>(null);
+  const [feedCache, setFeedCache] = useState<Record<string, GalleryFeedState>>({});
   const [loadingMore, setLoadingMore] = useState(false);
 
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -119,29 +211,69 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
     activeFilterRef.current = filterKey;
   }, [filterKey]);
 
-  // Derive active feed synchronously from feedState (or SSR initialPrompts for All:Featured)
-  const isFeedCurrent = feedState?.key === filterKey;
-  const pages = isFeedCurrent
-    ? feedState.pages
+  // Background idle prefetch for common feeds (Trending, Newest, Vibe Coding) so tab clicks are 0ms
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const warmTargets: Array<{ tab: Tab; sort: Sort }> = [
+        { tab: 'All', sort: 'Popular' },
+        { tab: 'All', sort: 'Newest' },
+        { tab: 'Vibe Coding', sort: 'Featured' },
+      ];
+      for (const target of warmTargets) {
+        const key = `${target.tab}:${target.sort}`;
+        const qs = new URLSearchParams({
+          tab: target.tab,
+          sort: target.sort,
+          page: '1',
+        });
+        fetch(`/api/prompts?${qs.toString()}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (!data?.prompts) return;
+            setFeedCache((prev) => {
+              if (prev[key]) return prev;
+              return {
+                ...prev,
+                [key]: {
+                  key,
+                  pages: [data.prompts],
+                  totalCount: data.total ?? data.prompts.length,
+                  currentPage: 1,
+                  hasMore: Boolean(data.hasMore),
+                },
+              };
+            });
+          })
+          .catch(() => {});
+      }
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Derive active feed synchronously from feedCache (or SSR initialPrompts for All:Featured)
+  const activeFeed = feedCache[filterKey];
+  const isFeedCurrent = Boolean(activeFeed);
+  const pages = activeFeed
+    ? activeFeed.pages
     : isDefaultFilter
       ? [initialPrompts]
       : [];
-  const totalCount = isFeedCurrent
-    ? feedState.totalCount
+  const totalCount = activeFeed
+    ? activeFeed.totalCount
     : isDefaultFilter
       ? initialTotal
       : (tabCounts[activeTab] ?? initialTotal);
-  const currentPage = isFeedCurrent ? feedState.currentPage : 1;
-  const hasMore = isFeedCurrent
-    ? feedState.hasMore
+  const currentPage = activeFeed ? activeFeed.currentPage : 1;
+  const hasMore = activeFeed
+    ? activeFeed.hasMore
     : isDefaultFilter
       ? initialPrompts.length < initialTotal
       : false;
   const loading = !isDefaultFilter && !isFeedCurrent;
 
-  // Fetch page 1 whenever a non-default tab/sort filter becomes active
+  // Fetch page 1 whenever a non-default tab/sort filter becomes active (instant if cached in feedCache!)
   useEffect(() => {
-    if (isDefaultFilter || feedState?.key === filterKey) return;
+    if (isDefaultFilter || feedCache[filterKey]) return;
 
     const controller = new AbortController();
     const qs = new URLSearchParams({
@@ -156,28 +288,34 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
         if (controller.signal.aborted) return;
         const prompts: Prompt[] = data?.prompts ?? [];
         const total: number = data?.total ?? prompts.length;
-        setFeedState({
-          key: filterKey,
-          pages: [prompts],
-          totalCount: total,
-          currentPage: 1,
-          hasMore: Boolean(data?.hasMore),
-        });
+        setFeedCache((prev) => ({
+          ...prev,
+          [filterKey]: {
+            key: filterKey,
+            pages: [prompts],
+            totalCount: total,
+            currentPage: 1,
+            hasMore: Boolean(data?.hasMore),
+          },
+        }));
       })
       .catch((err) => {
         if (err?.name !== 'AbortError') {
-          setFeedState({
-            key: filterKey,
-            pages: [[]],
-            totalCount: 0,
-            currentPage: 1,
-            hasMore: false,
-          });
+          setFeedCache((prev) => ({
+            ...prev,
+            [filterKey]: {
+              key: filterKey,
+              pages: [[]],
+              totalCount: 0,
+              currentPage: 1,
+              hasMore: false,
+            },
+          }));
         }
       });
 
     return () => controller.abort();
-  }, [activeTab, activeSort, filterKey, isDefaultFilter, feedState?.key]);
+  }, [activeTab, activeSort, filterKey, isDefaultFilter, feedCache]);
 
   const loadNextPage = useCallback(async () => {
     if (loading || loadingMore || !hasMore) return;
@@ -196,23 +334,26 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
       if (activeFilterRef.current !== filterKey) return;
       const nextItems: Prompt[] = data.prompts ?? [];
 
-      setFeedState((prev) => {
-        const basePages =
-          prev && prev.key === filterKey
-            ? prev.pages
-            : isDefaultFilter
-              ? [initialPrompts]
-              : [];
+      setFeedCache((prev) => {
+        const existing = prev[filterKey];
+        const basePages = existing
+          ? existing.pages
+          : isDefaultFilter
+            ? [initialPrompts]
+            : [];
         const seen = new Set(basePages.flat().map((p) => p.id));
         const deduped = nextItems.filter((p) => !seen.has(p.id));
         const nextPages = deduped.length > 0 ? [...basePages, deduped] : basePages;
 
         return {
-          key: filterKey,
-          pages: nextPages,
-          totalCount: data.total ?? totalCount,
-          currentPage: nextPage,
-          hasMore: Boolean(data.hasMore) && nextItems.length >= PAGE_SIZE / 2,
+          ...prev,
+          [filterKey]: {
+            key: filterKey,
+            pages: nextPages,
+            totalCount: data.total ?? totalCount,
+            currentPage: nextPage,
+            hasMore: Boolean(data.hasMore) && nextItems.length >= PAGE_SIZE / 2,
+          },
         };
       });
     } finally {
@@ -264,11 +405,27 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
         </nav>
       </div>
 
+      {/* Optional Announcement Banner */}
+      {settings.announcementBar?.trim() && (
+        <div
+          className="px-4 py-2 text-center text-[12px] font-semibold text-white flex items-center justify-center gap-2"
+          style={{
+            background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
+          }}
+        >
+          <Megaphone size={13} className="shrink-0" />
+          <span>{settings.announcementBar}</span>
+        </div>
+      )}
+
       <div className="px-4 md:px-6 pt-4 md:pt-5 pb-28 max-w-[1680px] mx-auto">
         <HeroHeader
           total={tabCounts.All ?? initialTotal}
+          vibeCount={tabCounts['Vibe Coding'] ?? 0}
+          activeTab={activeTab}
           onSearch={() => openModal('search')}
           onPopular={() => setGalleryFilter({ sort: 'Popular' })}
+          onSelectTab={(t) => setGalleryFilter({ tab: t })}
         />
 
         <TabBar
@@ -278,19 +435,33 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
           onSort={(s: Sort) => setGalleryFilter({ sort: s })}
           tabCounts={tabCounts}
           totalCount={totalCount}
+          gridLayout={gridLayout}
+          onGridLayoutChange={setGridLayout}
         />
 
         {!loading && totalLoaded === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-[20px] border border-white/[0.07] bg-[#111115]">
-            <Sparkles size={28} className="text-violet-400 mb-3" />
-            <p className="text-[15px] font-semibold text-white">No prompts found in {activeTab}</p>
-            <p className="text-[13px] text-zinc-400 mt-1 mb-5">
+          <div
+            className="flex flex-col items-center justify-center py-20 px-4 text-center rounded-2xl theme-surface"
+          >
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3"
+              style={{
+                backgroundColor: 'var(--accent-soft)',
+                border: '1px solid var(--accent-border)',
+              }}
+            >
+              <LottieIcon name="empty" size={28} />
+            </div>
+            <p className="text-[15px] font-semibold" style={{ color: 'var(--fg-primary)' }}>
+              No prompts found in {activeTab}
+            </p>
+            <p className="text-[13px] mt-1 mb-5" style={{ color: 'var(--fg-muted)' }}>
               Try switching models or resetting filters to browse the full gallery.
             </p>
             <button
               type="button"
               onClick={() => setGalleryFilter({ tab: 'All', sort: 'Featured' })}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-[10px] text-[13px] font-semibold bg-white/[0.08] hover:bg-white/[0.12] text-white border border-white/10 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold transition-colors cursor-pointer theme-surface theme-surface-hover"
             >
               <RotateCcw size={13} />
               Reset filters
@@ -301,7 +472,7 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
             pages={pages}
             loading={loading}
             loadingMore={loadingMore}
-            className="masonry-responsive"
+            className={gridLayout}
           />
         )}
 
@@ -314,7 +485,7 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
               type="button"
               onClick={loadNextPage}
               disabled={loadingMore}
-              className="px-5 py-2.5 rounded-full text-[13px] font-semibold text-zinc-200 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.1] transition-all cursor-pointer disabled:opacity-50"
+              className="px-5 py-2.5 rounded-full text-[13px] font-semibold transition-all cursor-pointer disabled:opacity-50 theme-surface theme-surface-hover"
             >
               {loadingMore
                 ? 'Loading more prompts…'
@@ -324,7 +495,7 @@ export function GalleryClient({ initialPrompts, initialTotal, tabCounts, setting
         )}
 
         {!loading && !hasMore && totalLoaded > 0 && (
-          <p className="text-center text-[12px] text-[#71717a] mt-8">
+          <p className="text-center text-[12px] mt-8" style={{ color: 'var(--fg-subtle)' }}>
             Showing all {totalLoaded.toLocaleString()} prompts
           </p>
         )}

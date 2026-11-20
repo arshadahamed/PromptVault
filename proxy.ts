@@ -44,7 +44,7 @@ async function verifyToken(token: string): Promise<boolean> {
   }
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const token = req.cookies.get(COOKIE)?.value;
   if (!token || !(await verifyToken(token))) {
     const loginUrl = new URL('/login', req.url);

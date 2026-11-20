@@ -117,12 +117,38 @@ function toRow(p: Partial<DbPrompt>): Record<string, unknown> {
   return r;
 }
 
+// ── Fast In-Memory Read Cache (eliminates repeated Supabase round-trips) ─────
+interface MemCacheEntry<T> {
+  value: T;
+  expiresAt: number;
+}
+const MEM_TTL_MS = 120_000; // 2 minutes in-RAM cache
+const memCache = new Map<string, MemCacheEntry<unknown>>();
+
+function getMemCache<T>(key: string): T | undefined {
+  const entry = memCache.get(key);
+  if (!entry) return undefined;
+  if (Date.now() > entry.expiresAt) {
+    memCache.delete(key);
+    return undefined;
+  }
+  return entry.value as T;
+}
+
+function setMemCache<T>(key: string, value: T, ttlMs = MEM_TTL_MS): T {
+  memCache.set(key, { value, expiresAt: Date.now() + ttlMs });
+  return value;
+}
+
+export function clearPromptsMemCache(): void {
+  memCache.clear();
+}
+
 // ── Prompts ───────────────────────────────────────────────────────────────────
 
 /**
  * Paginated prompt fetch — only fetches `limit` rows per page.
- * Server-side tab/sort filtering keeps payloads tiny (~80 KB vs ~4.7 MB).
- * Cached for 60 seconds via Next.js unstable_cache.
+ * Server-side tab/sort filtering + in-memory & Next.js cache keeps responses < 5ms.
  */
 export interface GetPromptsPaginatedOptions {
   tab?: string;   // 'All' | 'ChatGPT' | 'Midjourney' | etc.
@@ -131,8 +157,8 @@ export interface GetPromptsPaginatedOptions {
   limit?: number;
 }
 
-export const getPromptsPaginated = unstable_cache(
-  async ({ tab = 'All', sort = 'Featured', page = 1, limit = 48 }: GetPromptsPaginatedOptions = {}): Promise<DbPrompt[]> => {
+const _fetchPromptsPaginated = unstable_cache(
+  async ({ tab = 'All', sort = 'Featured', page = 1, limit = 24 }: GetPromptsPaginatedOptions = {}): Promise<DbPrompt[]> => {
     let q = supabase
       .from('prompts')
       .select(PUBLIC_GALLERY_COLUMNS)
@@ -154,11 +180,23 @@ export const getPromptsPaginated = unstable_cache(
     return (data ?? []).map(fromRow);
   },
   ['prompts-paginated'],
-  { revalidate: 60, tags: ['prompts'] }
+  { revalidate: 300, tags: ['prompts'] }
 );
 
-/** Total published prompt count — cached 60 s */
-export const getPromptCount = unstable_cache(
+export async function getPromptsPaginated(opts: GetPromptsPaginatedOptions = {}): Promise<DbPrompt[]> {
+  const tab = opts.tab ?? 'All';
+  const sort = opts.sort ?? 'Featured';
+  const page = opts.page ?? 1;
+  const limit = opts.limit ?? 24;
+  const key = `paginated:${tab}:${sort}:${page}:${limit}`;
+  const cached = getMemCache<DbPrompt[]>(key);
+  if (cached) return cached;
+  const res = await _fetchPromptsPaginated({ tab, sort, page, limit });
+  return setMemCache(key, res);
+}
+
+/** Total published prompt count — cached in memory + Next.js unstable_cache */
+const _fetchPromptCount = unstable_cache(
   async (tab = 'All'): Promise<number> => {
     let q = supabase.from('prompts').select('id', { count: 'exact', head: true }).eq('published', true);
     if (tab !== 'All') {
@@ -170,11 +208,19 @@ export const getPromptCount = unstable_cache(
     return count ?? 0;
   },
   ['prompts-count'],
-  { revalidate: 60, tags: ['prompts'] }
+  { revalidate: 300, tags: ['prompts'] }
 );
 
+export async function getPromptCount(tab = 'All'): Promise<number> {
+  const key = `count:${tab}`;
+  const cached = getMemCache<number>(key);
+  if (cached !== undefined) return cached;
+  const res = await _fetchPromptCount(tab);
+  return setMemCache(key, res);
+}
+
 /** Cached per-tab published counts for filter pills & sidebar badges */
-export const getTabCounts = unstable_cache(
+const _fetchTabCounts = unstable_cache(
   async (): Promise<Record<string, number>> => {
     const entries = await Promise.all(
       GALLERY_TABS.map(async (tab) => [tab, await getPromptCount(tab)] as const)
@@ -182,8 +228,16 @@ export const getTabCounts = unstable_cache(
     return Object.fromEntries(entries);
   },
   ['prompts-tab-counts'],
-  { revalidate: 60, tags: ['prompts'] }
+  { revalidate: 300, tags: ['prompts'] }
 );
+
+export async function getTabCounts(): Promise<Record<string, number>> {
+  const key = 'tab-counts';
+  const cached = getMemCache<Record<string, number>>(key);
+  if (cached) return cached;
+  const res = await _fetchTabCounts();
+  return setMemCache(key, res);
+}
 
 /** Public search — strictly published rows, sanitized against PostgREST injection */
 export async function searchPublishedPrompts(rawQuery: string, limit = 12): Promise<DbPrompt[]> {
@@ -215,8 +269,8 @@ export async function getPublishedPromptsByIds(rawIds: string): Promise<DbPrompt
   return ids.map((id) => map.get(id)).filter((x): x is DbPrompt => Boolean(x));
 }
 
-/** Public prompt detail + up to 6 same-category published prompts, cached 60 s */
-export const getPublishedPromptWithRelated = unstable_cache(
+/** Public prompt detail + up to 6 same-category published prompts, cached in RAM + Next.js cache */
+const _fetchPublishedPromptWithRelated = unstable_cache(
   async (rawId: string): Promise<{ prompt: DbPrompt | null; related: DbPrompt[] }> => {
     const [id] = sanitizePromptIds(rawId, 1);
     if (!id) return { prompt: null, related: [] };
@@ -246,8 +300,18 @@ export const getPublishedPromptWithRelated = unstable_cache(
     };
   },
   ['prompt-detail-with-related'],
-  { revalidate: 60, tags: ['prompts'] }
+  { revalidate: 300, tags: ['prompts'] }
 );
+
+export async function getPublishedPromptWithRelated(
+  rawId: string
+): Promise<{ prompt: DbPrompt | null; related: DbPrompt[] }> {
+  const key = `detail:${rawId}`;
+  const cached = getMemCache<{ prompt: DbPrompt | null; related: DbPrompt[] }>(key);
+  if (cached) return cached;
+  const res = await _fetchPublishedPromptWithRelated(rawId);
+  return setMemCache(key, res);
+}
 
 /** Admin only — fetches all rows (no cache) */
 export async function getAllPrompts(): Promise<DbPrompt[]> {
@@ -309,6 +373,7 @@ export async function createPrompt(
     .select()
     .single();
   if (error) throw new Error(error.message);
+  clearPromptsMemCache();
   return fromRow(inserted);
 }
 
@@ -324,6 +389,7 @@ export async function updatePrompt(
     .select()
     .maybeSingle();
   if (error) throw new Error(error.message);
+  clearPromptsMemCache();
   return updated ? fromRow(updated) : null;
 }
 
@@ -333,6 +399,7 @@ export async function deletePrompt(id: string): Promise<boolean> {
     .delete({ count: 'exact' })
     .eq('id', id);
   if (error) throw new Error(error.message);
+  clearPromptsMemCache();
   return (count ?? 0) > 0;
 }
 
@@ -343,6 +410,7 @@ export async function bulkDeletePrompts(ids: string[]): Promise<number> {
     .delete({ count: 'exact' })
     .in('id', ids);
   if (error) throw new Error(error.message);
+  clearPromptsMemCache();
   return count ?? 0;
 }
 
@@ -357,6 +425,7 @@ export async function bulkUpdatePrompts(
     .update(row, { count: 'exact' })
     .in('id', ids);
   if (error) throw new Error(error.message);
+  clearPromptsMemCache();
   return count ?? 0;
 }
 
@@ -461,6 +530,7 @@ export async function createPromptsBatch(
     if (error) throw new Error(error.message);
     inserted += rows.length;
   }
+  clearPromptsMemCache();
   return inserted;
 }
 

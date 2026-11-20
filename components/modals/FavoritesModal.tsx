@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Heart, Trash2 } from 'lucide-react';
 import { ModalShell } from './ModalShell';
 import { useApp } from '@/context/AppContext';
+import { LottieIcon } from '@/components/ui/LottieIcon';
 import type { Prompt } from '@/lib/types';
 
 export function FavoritesModal({ open }: { open: boolean }) {
@@ -36,15 +37,15 @@ export function FavoritesModal({ open }: { open: boolean }) {
 
   return (
     <ModalShell
-      title="Favorites"
-      subtitle={`${favorites.length} saved`}
+      title="Saved Favorites"
+      subtitle={`${favorites.length} saved in your local vault`}
       open={open}
       headerAction={
         favorites.length > 0 ? (
           <button
             type="button"
             onClick={clearFavorites}
-            className="text-[11px] font-medium text-zinc-400 hover:text-rose-400 flex items-center gap-1 px-2 py-1 rounded-[8px] hover:bg-white/[0.05] transition-colors cursor-pointer"
+            className="text-[11px] font-medium hover:text-rose-500 flex items-center gap-1 px-2.5 py-1 rounded-lg transition-colors cursor-pointer theme-surface"
           >
             <Trash2 size={12} />
             Clear
@@ -53,11 +54,15 @@ export function FavoritesModal({ open }: { open: boolean }) {
       }
     >
       {loading ? (
-        <p className="text-[13px] text-[#71717a] text-center mt-12">Loading favorites…</p>
+        <p className="text-[13px] text-center mt-12" style={{ color: 'var(--fg-subtle)' }}>
+          Loading favorites…
+        </p>
       ) : visibleItems.length === 0 ? (
         <div className="text-center mt-14 px-4">
-          <Heart size={28} className="mx-auto mb-3 text-zinc-600" />
-          <p className="text-[13px] text-zinc-400">
+          <div className="mx-auto mb-3 w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: 'rgba(236,72,153,0.12)' }}>
+            <LottieIcon name="heart" size={24} />
+          </div>
+          <p className="text-[13px]" style={{ color: 'var(--fg-muted)' }}>
             No favorites yet. Tap the heart on any prompt card to save it here.
           </p>
         </div>
@@ -65,31 +70,43 @@ export function FavoritesModal({ open }: { open: boolean }) {
         <ul className="flex flex-col gap-1.5">
           {visibleItems.map((p) => (
             <li key={p.id}>
-              <div className="flex gap-3 items-start p-2.5 rounded-[12px] hover:bg-white/[0.05] border border-transparent hover:border-white/[0.07] transition-all">
+              <div
+                className="flex gap-3 items-start p-2.5 rounded-xl transition-all theme-surface-hover"
+                style={{ border: '1px solid transparent' }}
+              >
                 <Link
                   href={`/prompt/${p.id}`}
                   onClick={closeModal}
                   className="flex gap-3 items-start flex-1 min-w-0"
                 >
                   <div
-                    className="w-11 h-11 rounded-[9px] shrink-0 overflow-hidden ring-1 ring-white/10"
-                    style={{ background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})` }}
+                    className="w-11 h-11 rounded-xl shrink-0 overflow-hidden"
+                    style={{
+                      background: `linear-gradient(135deg, ${p.gradientFrom}, ${p.gradientTo})`,
+                      border: '1px solid var(--border-default)',
+                    }}
                   >
                     {p.localImg && (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={p.localImg} alt="" className="w-full h-full object-cover" loading="lazy" />
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] font-medium text-zinc-100 leading-snug line-clamp-2">
-                      {p.promptText.slice(0, 100)}
+                    <p
+                      className="text-[12.5px] font-medium leading-snug line-clamp-2"
+                      style={{ color: 'var(--fg-primary)' }}
+                    >
+                      {p.title || p.promptText.slice(0, 100)}
                     </p>
-                    <p className="text-[11px] text-[#71717a] mt-1">{p.model}</p>
+                    <p className="text-[11px] mt-1 font-medium" style={{ color: 'var(--accent-text)' }}>
+                      {p.model}
+                    </p>
                   </div>
                 </Link>
                 <button
                   type="button"
                   onClick={() => toggleFavorite(p.id)}
-                  className="shrink-0 mt-1 p-1.5 rounded-full text-pink-400 hover:text-pink-300 hover:bg-pink-500/10 transition-colors cursor-pointer"
+                  className="shrink-0 mt-1 p-1.5 rounded-full text-pink-500 hover:bg-pink-500/10 transition-colors cursor-pointer"
                   aria-label="Remove from favorites"
                 >
                   <Heart size={14} fill="currentColor" />

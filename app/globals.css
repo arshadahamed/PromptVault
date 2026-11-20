@@ -1,23 +1,186 @@
 @import "tailwindcss";
 
 @theme inline {
-  --color-background: #09090b;
-  --color-foreground: #f4f4f5;
-  --color-muted: #141418;
-  --color-muted-active: #1d1d24;
-  --color-muted-hover: #25252e;
-  --color-muted-foreground: #a1a1aa;
-  --color-muted-foreground-subtle: #71717a;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-sidebar: #0d0d11;
+  --color-background: var(--bg-canvas);
+  --color-foreground: var(--fg-primary);
+  --color-muted: var(--bg-muted);
+  --color-muted-active: var(--bg-hover);
+  --color-muted-hover: var(--bg-hover);
+  --color-muted-foreground: var(--fg-muted);
+  --color-muted-foreground-subtle: var(--fg-subtle);
+  --color-border: var(--border-default);
+  --color-sidebar: var(--bg-sidebar);
   --font-inter: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-poppins: var(--font-poppins), var(--font-inter), sans-serif;
 }
 
-:root {
-  --sidebar-width: 260px;
+/* ══════════════════════════════════════════════════════════════════════════
+   UNIFIED DESIGN SYSTEM TOKENS (shadcn/ui · Ant Design 5 · Material UI v6)
+   Supports [data-theme="dark"] and [data-theme="light"] on <html> & .admin-root
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root,
+html[data-theme="dark"],
+.admin-root[data-theme="dark"] {
+  color-scheme: dark;
+  --sidebar-width: 268px;
   --accent: #7c3aed;
   --accent-2: #06b6d4;
+
+  /* Public & Unified Canvas Tokens (Dark Mode — Obsidian Studio) */
+  --bg-canvas: #09090b;
+  --bg-sidebar: #0d0d12;
+  --bg-topbar: rgba(9, 9, 11, 0.84);
+  --bg-card: #111117;
+  --bg-elevated: #16161f;
+  --bg-muted: rgba(255, 255, 255, 0.045);
+  --bg-hover: rgba(255, 255, 255, 0.08);
+  --bg-glass: rgba(17, 17, 23, 0.78);
+  --bg-glass-strong: rgba(13, 13, 18, 0.90);
+  --bg-stage: #07070a;
+  --bg-code: #0b0b10;
+  --bg-code-header: #12121a;
+
+  --fg-primary: #f4f4f5;
+  --fg-secondary: #d4d4d8;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
+
+  --border-default: rgba(255, 255, 255, 0.085);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+
+  --accent-primary: #7c3aed;
+  --accent-hover: #6d28d9;
+  --accent-soft: rgba(124, 58, 237, 0.15);
+  --accent-border: rgba(139, 92, 246, 0.36);
+  --accent-text: #c4b5fd;
+
+  --cyan-soft: rgba(6, 182, 212, 0.15);
+  --cyan-border: rgba(34, 211, 238, 0.35);
+  --cyan-text: #67e8f9;
+
+  --shadow-card: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 4px 18px rgba(0, 0, 0, 0.42);
+  --shadow-card-hover: inset 0 1px 0 rgba(255, 255, 255, 0.14), 0 18px 42px -10px rgba(0, 0, 0, 0.72), 0 0 28px rgba(124, 58, 237, 0.18);
+  --shadow-elevated: 0 20px 50px -12px rgba(0, 0, 0, 0.75);
+
+  /* Admin Tokens (Dark) */
+  --adm-bg: #09090b;
+  --adm-sidebar: #0d0d12;
+  --adm-topbar: rgba(9, 9, 11, 0.84);
+  --adm-surface: #111117;
+  --adm-surface-elevated: #17171f;
+  --adm-surface-muted: rgba(255, 255, 255, 0.045);
+  --adm-surface-hover: rgba(255, 255, 255, 0.08);
+  --adm-border: rgba(255, 255, 255, 0.085);
+  --adm-border-strong: rgba(255, 255, 255, 0.16);
+  --adm-border-subtle: rgba(255, 255, 255, 0.05);
+  --adm-text: #f4f4f5;
+  --adm-text-secondary: #d4d4d8;
+  --adm-text-muted: #a1a1aa;
+  --adm-text-subtle: #71717a;
+  --adm-input-bg: #14141b;
+  --adm-input-border: rgba(255, 255, 255, 0.12);
+  --adm-accent: #7c3aed;
+  --adm-accent-hover: #6d28d9;
+  --adm-accent-soft: rgba(124, 58, 237, 0.15);
+  --adm-accent-border: rgba(124, 58, 237, 0.36);
+  --adm-accent-text: #c4b5fd;
+  --adm-success-bg: rgba(16, 185, 129, 0.13);
+  --adm-success-border: rgba(16, 185, 129, 0.28);
+  --adm-success-text: #6ee7b7;
+  --adm-warning-bg: rgba(245, 158, 11, 0.13);
+  --adm-warning-border: rgba(245, 158, 11, 0.28);
+  --adm-warning-text: #fcd34d;
+  --adm-danger-bg: rgba(239, 68, 68, 0.13);
+  --adm-danger-border: rgba(239, 68, 68, 0.3);
+  --adm-danger-text: #fca5a5;
+  --adm-info-bg: rgba(59, 130, 246, 0.13);
+  --adm-info-border: rgba(59, 130, 246, 0.28);
+  --adm-info-text: #93c5fd;
+  --adm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.38);
+  --adm-shadow-md: 0 10px 28px -8px rgba(0, 0, 0, 0.62);
+  --adm-shadow-lg: 0 24px 48px -12px rgba(0, 0, 0, 0.8);
+}
+
+html[data-theme="light"],
+.admin-root[data-theme="light"] {
+  color-scheme: light;
+
+  /* Public & Unified Canvas Tokens (Light Mode — Editorial Alabaster & Slate) */
+  --bg-canvas: #f8fafc;
+  --bg-sidebar: #ffffff;
+  --bg-topbar: rgba(248, 250, 252, 0.88);
+  --bg-card: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-muted: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  --bg-glass: rgba(255, 255, 255, 0.84);
+  --bg-glass-strong: rgba(255, 255, 255, 0.94);
+  --bg-stage: #f1f5f9;
+  --bg-code: #0f172a;
+  --bg-code-header: #1e293b;
+
+  --fg-primary: #0f172a;
+  --fg-secondary: #334155;
+  --fg-muted: #475569;
+  --fg-subtle: #64748b;
+
+  --border-default: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --border-subtle: #f1f5f9;
+
+  --accent-primary: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent-soft: rgba(109, 40, 217, 0.09);
+  --accent-border: rgba(109, 40, 217, 0.26);
+  --accent-text: #6d28d9;
+
+  --cyan-soft: rgba(8, 145, 178, 0.10);
+  --cyan-border: rgba(8, 145, 178, 0.28);
+  --cyan-text: #0e7490;
+
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 6px 18px -4px rgba(15, 23, 42, 0.06);
+  --shadow-card-hover: 0 18px 38px -8px rgba(15, 23, 42, 0.14), 0 0 0 1px rgba(109, 40, 217, 0.35);
+  --shadow-elevated: 0 24px 48px -12px rgba(15, 23, 42, 0.16);
+
+  /* Admin Tokens (Light) */
+  --adm-bg: #f8fafc;
+  --adm-sidebar: #ffffff;
+  --adm-topbar: rgba(248, 250, 252, 0.88);
+  --adm-surface: #ffffff;
+  --adm-surface-elevated: #ffffff;
+  --adm-surface-muted: #f1f5f9;
+  --adm-surface-hover: #e2e8f0;
+  --adm-border: #e2e8f0;
+  --adm-border-strong: #cbd5e1;
+  --adm-border-subtle: #f1f5f9;
+  --adm-text: #0f172a;
+  --adm-text-secondary: #334155;
+  --adm-text-muted: #475569;
+  --adm-text-subtle: #64748b;
+  --adm-input-bg: #ffffff;
+  --adm-input-border: #cbd5e1;
+  --adm-accent: #6d28d9;
+  --adm-accent-hover: #5b21b6;
+  --adm-accent-soft: rgba(109, 40, 217, 0.09);
+  --adm-accent-border: rgba(109, 40, 217, 0.25);
+  --adm-accent-text: #5b21b6;
+  --adm-success-bg: #ecfdf5;
+  --adm-success-border: #a7f3d0;
+  --adm-success-text: #047857;
+  --adm-warning-bg: #fffbeb;
+  --adm-warning-border: #fde68a;
+  --adm-warning-text: #b45309;
+  --adm-danger-bg: #fef2f2;
+  --adm-danger-border: #fecaca;
+  --adm-danger-text: #b91c1c;
+  --adm-info-bg: #eff6ff;
+  --adm-info-border: #bfdbfe;
+  --adm-info-text: #1d4ed8;
+  --adm-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --adm-shadow-md: 0 8px 24px -6px rgba(15, 23, 42, 0.08);
+  --adm-shadow-lg: 0 24px 48px -12px rgba(15, 23, 42, 0.16);
 }
 
 *, *::before, *::after {
@@ -26,56 +189,72 @@
 
 html {
   font-size: 16px;
-  color-scheme: dark;
   scroll-behavior: smooth;
 }
 
 body {
-  background-color: #09090b;
-  color: #f4f4f5;
+  background-color: var(--bg-canvas);
+  color: var(--fg-primary);
   font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 0.9375rem;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   margin: 0;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 img {
   display: block;
 }
 
-/* ── Focus accessibility ── */
+/* ── Focus accessibility (shadcn/ui ring pattern) ── */
 :focus-visible {
-  outline: 2px solid rgba(139, 92, 246, 0.75);
+  outline: 2px solid var(--accent-primary);
   outline-offset: 2px;
 }
 
 /* ── Scrollbar ── */
-::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #27272f; border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: #3f3f4a; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--fg-subtle); }
 
 /* ── Hide horizontal scrollbar for mobile tab rails ── */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* ── Glass surfaces ── */
+/* ── Theme-aware Surfaces (shadcn/ui Card + Ant Design Card + MUI Paper) ── */
+.theme-surface {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-default);
+  color: var(--fg-primary);
+  box-shadow: var(--adm-shadow-sm);
+}
+
+.theme-surface-hover {
+  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.theme-surface-hover:hover {
+  background-color: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
 .glass {
-  background: rgba(17, 17, 22, 0.72);
+  background: var(--bg-glass);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--border-default);
 }
 
 .glass-strong {
-  background: rgba(15, 15, 20, 0.88);
+  background: var(--bg-glass-strong);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--border-strong);
 }
 
-/* ── Responsive masonry (balanced in 2, 3, and 4 columns with 48-card chunks) ── */
+/* ── Responsive masonry & multi-layout grid modes ── */
 .masonry-responsive {
   column-count: 4;
   column-gap: 14px;
@@ -95,20 +274,24 @@ img {
 
 .masonry-3 {
   column-count: 3;
-  column-gap: 12px;
+  column-gap: 14px;
 }
 .masonry-2 {
   column-count: 2;
-  column-gap: 10px;
+  column-gap: 14px;
 }
 @media (max-width: 767px) {
   .masonry-3 {
     column-count: 2;
-    column-gap: 8px;
+    column-gap: 10px;
+  }
+  .masonry-2 {
+    column-count: 1;
+    column-gap: 10px;
   }
 }
 
-/* ── Skeleton shimmer (obsidian dark) ── */
+/* ── Skeleton shimmer (Theme-aware Dark & Light) ── */
 @keyframes shimmer {
   0%   { background-position: -600px 0; }
   100% { background-position: 600px 0; }
@@ -117,9 +300,9 @@ img {
 .skeleton {
   background: linear-gradient(
     90deg,
-    #141418 25%,
-    #1e1e26 50%,
-    #141418 75%
+    var(--bg-muted) 25%,
+    var(--bg-hover) 50%,
+    var(--bg-muted) 75%
   );
   background-size: 1200px 100%;
   animation: shimmer 1.5s ease-in-out infinite;
@@ -129,16 +312,16 @@ img {
 /* ── Animations ── */
 @keyframes float-slow {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
-  33%      { transform: translateY(-14px) rotate(1deg); }
-  66%      { transform: translateY(-6px) rotate(-1deg); }
+  33%      { transform: translateY(-10px) rotate(1deg); }
+  66%      { transform: translateY(-4px) rotate(-1deg); }
 }
 @keyframes float-medium {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
-  50%      { transform: translateY(-18px) rotate(1.5deg); }
+  50%      { transform: translateY(-5px) rotate(2deg); }
 }
 @keyframes orb-pulse {
-  0%, 100% { opacity: 0.45; transform: scale(1); }
-  50%      { opacity: 0.7; transform: scale(1.06); }
+  0%, 100% { opacity: 0.85; transform: scale(1); }
+  50%      { opacity: 1; transform: scale(1.07); }
 }
 @keyframes spin-slow {
   from { transform: rotate(0deg); }
@@ -162,9 +345,9 @@ img {
 }
 
 .anim-float-slow   { animation: float-slow 7s ease-in-out infinite; }
-.anim-float-medium { animation: float-medium 5s ease-in-out infinite; }
-.anim-orb-pulse    { animation: orb-pulse 5s ease-in-out infinite; }
-.anim-spin-slow    { animation: spin-slow 20s linear infinite; }
+.anim-float-medium { animation: float-medium 4s ease-in-out infinite; }
+.anim-orb-pulse    { animation: orb-pulse 3s ease-in-out infinite; }
+.anim-spin-slow    { animation: spin-slow 16s linear infinite; }
 .anim-spin-reverse { animation: spin-reverse 15s linear infinite; }
 .anim-fade-up      { animation: fade-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .anim-glow-pulse   { animation: glow-pulse 3.5s ease-in-out infinite; }
@@ -179,7 +362,8 @@ img {
   .anim-fade-up,
   .anim-glow-pulse,
   .anim-gradient-x,
-  .skeleton {
+  .skeleton,
+  .admin-skeleton {
     animation: none !important;
   }
   html { scroll-behavior: auto; }
@@ -187,107 +371,25 @@ img {
 
 /* ── Premium card elevation & gradient text ── */
 .card-surface {
-  background: #111115;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 16px rgba(0, 0, 0, 0.35);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  box-shadow: var(--shadow-card);
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .card-surface:hover {
-  border-color: rgba(139, 92, 246, 0.42);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 16px 40px -8px rgba(0, 0, 0, 0.65), 0 0 28px rgba(124, 58, 237, 0.16);
+  border-color: var(--accent-border);
+  box-shadow: var(--shadow-card-hover);
+  transform: translateY(-2px);
 }
 
 .gradient-text {
-  background: linear-gradient(135deg, #c4b5fd 0%, #a855f7 45%, #22d3ee 100%);
+  background: linear-gradient(135deg, #8b5cf6 0%, #a855f7 45%, #06b6d4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   ADMIN DESIGN SYSTEM TOKENS & UTILITIES
-   ══════════════════════════════════════════════════════════════ */
-
-.admin-root[data-theme="dark"] {
-  color-scheme: dark;
-  --adm-bg: #09090b;
-  --adm-sidebar: #0d0d11;
-  --adm-topbar: rgba(9, 9, 11, 0.84);
-  --adm-surface: #111116;
-  --adm-surface-elevated: #17171f;
-  --adm-surface-muted: rgba(255, 255, 255, 0.04);
-  --adm-surface-hover: rgba(255, 255, 255, 0.07);
-  --adm-border: rgba(255, 255, 255, 0.08);
-  --adm-border-strong: rgba(255, 255, 255, 0.15);
-  --adm-border-subtle: rgba(255, 255, 255, 0.05);
-  --adm-text: #f4f4f5;
-  --adm-text-secondary: #d4d4d8;
-  --adm-text-muted: #a1a1aa;
-  --adm-text-subtle: #71717a;
-  --adm-input-bg: #14141a;
-  --adm-input-border: rgba(255, 255, 255, 0.12);
-  --adm-accent: #7c3aed;
-  --adm-accent-hover: #6d28d9;
-  --adm-accent-soft: rgba(124, 58, 237, 0.14);
-  --adm-accent-border: rgba(124, 58, 237, 0.35);
-  --adm-accent-text: #c4b5fd;
-  --adm-success-bg: rgba(16, 185, 129, 0.12);
-  --adm-success-border: rgba(16, 185, 129, 0.28);
-  --adm-success-text: #6ee7b7;
-  --adm-warning-bg: rgba(245, 158, 11, 0.12);
-  --adm-warning-border: rgba(245, 158, 11, 0.28);
-  --adm-warning-text: #fcd34d;
-  --adm-danger-bg: rgba(239, 68, 68, 0.12);
-  --adm-danger-border: rgba(239, 68, 68, 0.3);
-  --adm-danger-text: #fca5a5;
-  --adm-info-bg: rgba(59, 130, 246, 0.12);
-  --adm-info-border: rgba(59, 130, 246, 0.28);
-  --adm-info-text: #93c5fd;
-  --adm-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --adm-shadow-md: 0 10px 28px -8px rgba(0, 0, 0, 0.6);
-  --adm-shadow-lg: 0 24px 48px -12px rgba(0, 0, 0, 0.78);
-}
-
-.admin-root[data-theme="light"] {
-  color-scheme: light;
-  --adm-bg: #f8fafc;
-  --adm-sidebar: #ffffff;
-  --adm-topbar: rgba(248, 250, 252, 0.88);
-  --adm-surface: #ffffff;
-  --adm-surface-elevated: #ffffff;
-  --adm-surface-muted: #f1f5f9;
-  --adm-surface-hover: #f1f5f9;
-  --adm-border: #e2e8f0;
-  --adm-border-strong: #cbd5e1;
-  --adm-border-subtle: #f1f5f9;
-  --adm-text: #0f172a;
-  --adm-text-secondary: #334155;
-  --adm-text-muted: #475569;
-  --adm-text-subtle: #64748b;
-  --adm-input-bg: #ffffff;
-  --adm-input-border: #cbd5e1;
-  --adm-accent: #6d28d9;
-  --adm-accent-hover: #5b21b6;
-  --adm-accent-soft: rgba(109, 40, 217, 0.08);
-  --adm-accent-border: rgba(109, 40, 217, 0.24);
-  --adm-accent-text: #5b21b6;
-  --adm-success-bg: #ecfdf5;
-  --adm-success-border: #a7f3d0;
-  --adm-success-text: #047857;
-  --adm-warning-bg: #fffbeb;
-  --adm-warning-border: #fde68a;
-  --adm-warning-text: #b45309;
-  --adm-danger-bg: #fef2f2;
-  --adm-danger-border: #fecaca;
-  --adm-danger-text: #b91c1c;
-  --adm-info-bg: #eff6ff;
-  --adm-info-border: #bfdbfe;
-  --adm-info-text: #1d4ed8;
-  --adm-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
-  --adm-shadow-md: 0 8px 24px -6px rgba(15, 23, 42, 0.08);
-  --adm-shadow-lg: 0 24px 48px -12px rgba(15, 23, 42, 0.16);
-}
-
+/* ── Admin & Form Controls ── */
 .admin-root {
   background-color: var(--adm-bg);
   color: var(--adm-text);
@@ -338,7 +440,7 @@ img {
 }
 
 .admin-surface-hover {
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .admin-surface-hover:hover {
@@ -355,10 +457,4 @@ img {
   );
   background-size: 1200px 100%;
   animation: shimmer 1.5s ease-in-out infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .admin-skeleton {
-    animation: none !important;
-  }
 }

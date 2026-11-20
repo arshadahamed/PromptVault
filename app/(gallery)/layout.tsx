@@ -1,4 +1,5 @@
 import { AppProvider } from '@/context/AppContext';
+import { AdminThemeProvider } from '@/context/AdminThemeContext';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { MobileHeader } from '@/components/sidebar/MobileHeader';
 import { ModalRoot } from '@/components/modals/ModalRoot';
@@ -14,16 +15,21 @@ export default async function GalleryLayout({ children }: { children: React.Reac
   ]);
 
   return (
-    <AppProvider>
-      <MobileHeader siteName={settings.siteName} settings={settings} tabCounts={tabCounts} />
-      <div className="flex min-h-screen pt-14 md:pt-0">
-        <div className="hidden md:block w-[260px] shrink-0" />
-        <div className="hidden md:block">
-          <Sidebar settings={settings} tabCounts={tabCounts} />
+    <AdminThemeProvider>
+      <AppProvider>
+        <MobileHeader siteName={settings.siteName} settings={settings} tabCounts={tabCounts} />
+        <div
+          className="flex min-h-screen pt-14 md:pt-0 transition-colors duration-200"
+          style={{ backgroundColor: 'var(--bg-canvas)', color: 'var(--fg-primary)' }}
+        >
+          <div className="hidden md:block w-[268px] shrink-0" />
+          <div className="hidden md:block">
+            <Sidebar settings={settings} tabCounts={tabCounts} />
+          </div>
+          <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
         </div>
-        <main className="flex-1 min-w-0 overflow-x-hidden">{children}</main>
-      </div>
-      <ModalRoot />
-    </AppProvider>
+        <ModalRoot />
+      </AppProvider>
+    </AdminThemeProvider>
   );
 }
